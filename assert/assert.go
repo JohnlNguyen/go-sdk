@@ -746,9 +746,9 @@ func fail(w io.Writer, t *testing.T, message string, userMessageComponents ...in
 %s
 %s:
 	%s
-%s:
+%s: 
 	%s
-%s:
+%s: 
 	%s
 
 `
@@ -764,9 +764,9 @@ func fail(w io.Writer, t *testing.T, message string, userMessageComponents ...in
 	}
 	errorFormat := `%s
 %s
-%s:
+%s: 
 	%s
-%s:
+%s: 
 	%s
 
 `
@@ -1135,10 +1135,6 @@ func shouldBeMultipleMessage(expected, actual interface{}, message string) strin
 
 func shouldBeMessage(object interface{}, message string) string {
 	actualLabel := color("Actual", WHITE)
-	if err, ok := object.(error); ok {
-		return fmt.Sprintf(`%s
-	%s: 	%+v`, message, actualLabel, err)
-	}
 	return fmt.Sprintf(`%s
 	%s: 	%#v`, message, actualLabel, object)
 }
@@ -1251,7 +1247,7 @@ func callerInfo() []string {
 		parts := strings.Split(file, "/")
 		dir := parts[len(parts)-2]
 		file = parts[len(parts)-1]
-		if dir != "assert" && dir != "mock" && dir != "require" {
+		if dir != "assert" && dir != "go-assert" && dir != "mock" && dir != "require" {
 			callers = append(callers, fmt.Sprintf("%s:%d", file, line))
 		}
 

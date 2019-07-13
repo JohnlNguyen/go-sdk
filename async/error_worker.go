@@ -3,120 +3,132 @@ package async
 import (
 	"context"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
-// NewErrorWorker creates a new worker.
-func NewErrorWorker(action ErrorWorkAction) *ErrorWorker {
+// NewErrorWorker creates a new error worker.
+func NewErrorWorker(action ErrorAction) *ErrorWorker {
 	return &ErrorWorker{
-		Latch:  NewLatch(),
-		Action: action,
-		Work:   make(chan error),
+		latch:  &Latch{},
+		action: action,
+		work:   make(chan error),
 	}
 }
 
-// ErrorWorker is a worker that is pushed work over a channel.
+// ErrorWorker is a worker that is pushed work as errors over a channel.
 type ErrorWorker struct {
-	*Latch
-	Context   context.Context
-	Action    ErrorWorkAction
-	Finalizer ErrorWorkerFinalizer
-	Work      chan error
+	latch    *Latch
+	action   ErrorAction
+	work     chan error
+	fallback func(error)
 }
 
-// Background returns the queue worker background context.
-func (qw *ErrorWorker) Background() context.Context {
-	if qw.Context != nil {
-		return qw.Context
-	}
-	return context.Background()
+// Latch returns the worker latch.
+func (ew *ErrorWorker) Latch() *Latch {
+	return ew.latch
 }
 
-// Enqueue adds an item to the work queue.
-func (qw *ErrorWorker) Enqueue(obj error) {
-	qw.Work <- obj
+// WithWork sets the work channel.
+// It allows you to override the default (non-buffered) channel with
+// a buffer of your chosing.
+func (ew *ErrorWorker) WithWork(work chan error) *ErrorWorker {
+	ew.work = work
+	return ew
 }
 
-// Start starts the worker with a given context.
-func (qw *ErrorWorker) Start() error {
-	if !qw.CanStart() {
-		return ex.New(ErrCannotStart)
-	}
-	qw.Starting()
-	qw.Dispatch()
-	return nil
+// Work returns the work channel.
+func (ew *ErrorWorker) Work() chan error {
+	return ew.work
+}
+
+// WithFallback sets the fallback collector.
+func (ew *ErrorWorker) WithFallback(action func(error)) *ErrorWorker {
+	ew.fallback = action
+	return ew
+}
+
+// Enqueue adds an item to the error work queue.
+func (ew *ErrorWorker) Enqueue(obj error) {
+	ew.work <- obj
+}
+
+// Start starts the worker.
+func (ew *ErrorWorker) Start() {
+	ew.StartContext(context.Background())
+}
+
+// StartContext starts the worker with a given context.
+func (ew *ErrorWorker) StartContext(ctx context.Context) {
+	ew.latch.Starting()
+	go ew.Dispatch(ctx)
+	<-ew.latch.NotifyStarted()
 }
 
 // Dispatch starts the listen loop for work.
-func (qw *ErrorWorker) Dispatch() {
-	qw.Started()
+func (ew *ErrorWorker) Dispatch(ctx context.Context) {
+	ew.latch.Started()
 	var workItem error
 	for {
 		select {
-		case workItem = <-qw.Work:
-			qw.Execute(qw.Background(), workItem)
-		case <-qw.NotifyPausing():
-			qw.Paused()
-			select {
-			case <-qw.NotifyResuming():
-				qw.Started()
-			case <-qw.NotifyStopping():
-				qw.Stopped()
-				return
-			}
-		case <-qw.NotifyStopping():
-			qw.Stopped()
+		case workItem = <-ew.work:
+			ew.Execute(ctx, workItem)
+		case <-ew.latch.NotifyStopping():
+			ew.latch.Stopped()
 			return
 		}
 	}
 }
 
 // Execute invokes the action and recovers panics.
-func (qw *ErrorWorker) Execute(ctx context.Context, workItem error) {
+func (ew *ErrorWorker) Execute(ctx context.Context, workItem error) {
 	defer func() {
-		if qw.Finalizer != nil {
-			qw.Finalizer(ctx, qw)
+		if r := recover(); r != nil {
+			if ew.fallback != nil {
+				ew.fallback(exception.New(r))
+			}
 		}
 	}()
-	if qw.Action != nil {
-		qw.Action(ctx, workItem)
+	if err := ew.action(ctx, workItem); err != nil {
+		if ew.fallback != nil {
+			ew.fallback(err)
+		}
 	}
-
 }
 
 // Stop stop the worker.
 // The work left in the queue will remain.
-func (qw *ErrorWorker) Stop() error {
-	if !qw.CanStop() {
-		return ex.New(ErrCannotStop)
-	}
-	qw.Stopping()
-	<-qw.NotifyStopped()
-	return nil
+func (ew *ErrorWorker) Stop() {
+	ew.latch.Stopping()
+	<-ew.latch.NotifyStopped()
 }
 
-// Drain stops the worker and synchronously drains the the remaining work
-// with a given context.
-func (qw *ErrorWorker) Drain(ctx context.Context) {
-	qw.Stopping()
-	<-qw.NotifyStopped()
+// Drain stops the worker and synchronously finishes work.
+func (ew *ErrorWorker) Drain() {
+	ew.DrainContext(context.Background())
+}
 
-	// create a signal that we've completed draining.
+// DrainContext stops the worker and synchronously drains the the remaining work
+// with a given context.
+func (ew *ErrorWorker) DrainContext(ctx context.Context) {
+	ew.latch.Stopping()
+	<-ew.latch.NotifyStopped()
+	remaining := len(ew.work)
 	stopped := make(chan struct{})
-	remaining := len(qw.Work)
 	go func() {
-		defer close(stopped)
+		defer func() {
+			close(stopped)
+		}()
 		for x := 0; x < remaining; x++ {
-			qw.Execute(qw.Background(), <-qw.Work)
+			ew.Execute(ctx, <-ew.work)
 		}
 	}()
 	<-stopped
 }
 
-// Close stops the worker and cleans up resources.
-func (qw *ErrorWorker) Close() error {
-	qw.Stopping()
-	<-qw.NotifyStopped()
-	close(qw.Work)
+// Close stops the worker.
+func (ew *ErrorWorker) Close() error {
+	ew.latch.Stopping()
+	<-ew.latch.NotifyStopped()
+	ew.work = nil
 	return nil
 }

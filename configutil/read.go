@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/yaml"
+	"go-sdk/env"
+	"go-sdk/exception"
+	"go-sdk/yaml"
 )
 
 const (
@@ -63,7 +63,7 @@ func Read(ref Any, options ...Option) (path string, err error) {
 			continue
 		}
 		if err != nil {
-			err = ex.New(err)
+			err = exception.New(err)
 			break
 		}
 		defer f.Close()
@@ -75,15 +75,12 @@ func Read(ref Any, options ...Option) (path string, err error) {
 	}
 
 	if typed, ok := ref.(ConfigResolver); ok {
-		if resolveErr := typed.Resolve(); resolveErr != nil {
-			err = resolveErr
+		if err = typed.Resolve(); err != nil {
 			return
 		}
 	}
-
 	if configOptions.Resolver != nil {
-		if resolveErr := configOptions.Resolver(ref); resolveErr != nil {
-			err = resolveErr
+		if err = configOptions.Resolver(ref); err != nil {
 			return
 		}
 	}
@@ -113,10 +110,10 @@ func deserialize(ext string, r io.Reader, ref Any) error {
 	// based off the extension, use the appropriate deserializer
 	switch strings.ToLower(ext) {
 	case ExtensionJSON:
-		return ex.New(json.NewDecoder(r).Decode(ref))
+		return exception.New(json.NewDecoder(r).Decode(ref))
 	case ExtensionYAML, ExtensionYML:
-		return ex.New(yaml.NewDecoder(r).Decode(ref))
+		return exception.New(yaml.NewDecoder(r).Decode(ref))
 	default: // return an error if we're passed a weird extension
-		return ex.New(ErrInvalidConfigExtension, ex.OptMessagef("extension: %s", ext))
+		return exception.New(ErrInvalidConfigExtension).WithMessagef("extension: %s", ext)
 	}
 }

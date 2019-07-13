@@ -10,5 +10,5 @@ const (
 const (
 	DefaultCANotAfterYears     = 10
 	DefaultClientNotAfterYears = 1
-	DefaultServerNotAfterYears = 5
+	DefaultServerNotAfterYears = 1
 )

@@ -3,7 +3,7 @@ package oauth
 import (
 	"testing"
 
-	assert "github.com/blend/go-sdk/assert"
+	assert "go-sdk/assert"
 )
 
 func TestProfileUsername(t *testing.T) {

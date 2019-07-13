@@ -3,7 +3,7 @@ package r2
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestOptMethods(t *testing.T) {

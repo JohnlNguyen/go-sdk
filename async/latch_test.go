@@ -3,13 +3,13 @@ package async
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestLatch(t *testing.T) {
 	assert := assert.New(t)
 
-	l := NewLatch()
+	l := &Latch{}
 
 	var didStart bool
 	var didAbort bool
@@ -20,7 +20,7 @@ func TestLatch(t *testing.T) {
 
 	l.Starting()
 	assert.True(l.IsStarting())
-	assert.False(l.IsStarted())
+	assert.False(l.IsRunning())
 	assert.False(l.IsStopping())
 	assert.False(l.IsStopped())
 
@@ -39,10 +39,9 @@ func TestLatch(t *testing.T) {
 			}
 		}
 	}()
-	<-l.NotifyStarted()
 
 	work <- true
-	assert.True(l.IsStarted())
+	assert.True(l.IsRunning())
 
 	// wait for work to happen.
 	<-workComplete
@@ -55,13 +54,13 @@ func TestLatch(t *testing.T) {
 	assert.True(didAbort)
 	assert.True(didGetWork)
 	assert.False(l.IsStopping())
-	assert.False(l.IsStarted())
+	assert.False(l.IsRunning())
 	assert.True(l.IsStopped())
 
 	didAbort = false
 	assert.False(didAbort)
 	assert.False(l.IsStopping())
-	assert.False(l.IsStarted())
+	assert.False(l.IsRunning())
 	assert.True(l.IsStopped())
 
 	// we should be able to do this again.
@@ -71,9 +70,8 @@ func TestLatch(t *testing.T) {
 		l.Starting()
 	}()
 	<-l.NotifyStarting()
-
 	assert.True(l.IsStarting())
-	assert.False(l.IsStarted())
+	assert.False(l.IsRunning())
 	assert.False(l.IsStopping())
 	assert.False(l.IsStopped())
 

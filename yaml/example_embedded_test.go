@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/blend/go-sdk/yaml"
+	"go-sdk/yaml"
 )
 
 // An example showing how to unmarshal embedded

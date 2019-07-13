@@ -9,12 +9,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 var (
 	// ErrURLUnset is a (hopefully) uncommon error.
-	ErrURLUnset = ex.Class("request url unset")
+	ErrURLUnset = exception.Class("request url unset")
 
 	// DefaultRequestTimeout is the default webhook timeout.
 	DefaultRequestTimeout = 10 * time.Second

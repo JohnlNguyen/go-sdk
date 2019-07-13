@@ -83,13 +83,7 @@ func SplitSpaceQuoted(text string) (output []string) {
 }
 
 func isQuote(r rune) bool {
-	return r == '"' ||
-		r == '\'' ||
-		r == '“' ||
-		r == '”' ||
-		r == '`' ||
-		r == '‘' ||
-		r == '’'
+	return r == '"' || r == '\'' || r == '“' || r == '”' || r == '`'
 }
 
 func matchesQuote(a, b rune) bool {
@@ -97,12 +91,6 @@ func matchesQuote(a, b rune) bool {
 		return true
 	}
 	if a == '”' && b == '“' {
-		return true
-	}
-	if a == '‘' && b == '’' {
-		return true
-	}
-	if a == '’' && b == '‘' {
 		return true
 	}
 	return a == b

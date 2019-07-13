@@ -4,12 +4,12 @@ import (
 	"io"
 	"sync"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // Errors
 const (
-	ErrMaxBytesWriterCapacityLimit ex.Class = "write failed; maximum capacity reached or would be exceede"
+	ErrMaxBytesWriterCapacityLimit exception.Class = "write failed; maximum capacity reached or would be exceede"
 )
 
 // LimitBytes returns a new max bytes writer.
@@ -44,16 +44,16 @@ func (mbw *MaxBytesWriter) Write(contents []byte) (int, error) {
 	defer mbw.Unlock()
 
 	if mbw.count >= mbw.max {
-		return 0, ex.New(ErrMaxBytesWriterCapacityLimit)
+		return 0, exception.New(ErrMaxBytesWriterCapacityLimit)
 	}
 	if len(contents)+mbw.count >= mbw.max {
-		return 0, ex.New(ErrMaxBytesWriterCapacityLimit)
+		return 0, exception.New(ErrMaxBytesWriterCapacityLimit)
 	}
 
 	written, err := mbw.inner.Write(contents)
 	mbw.count += written
 	if err != nil {
-		return written, ex.New(err)
+		return written, exception.New(err)
 	}
 	return written, nil
 }

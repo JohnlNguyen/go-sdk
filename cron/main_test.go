@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 // TestMain is the testing entrypoint.
@@ -29,10 +29,7 @@ var (
 type runAt time.Time
 
 func (ra runAt) Next(after time.Time) time.Time {
-	if after.Before(time.Time(ra)) {
-		return time.Time(ra)
-	}
-	return time.Time{}
+	return time.Time(ra)
 }
 
 func (raj *runAtJob) Name() string {

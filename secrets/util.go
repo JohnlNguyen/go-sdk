@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/env"
+	"go-sdk/exception"
 )
 
 // MustURL creates a new url and panics on error.
@@ -30,7 +30,7 @@ func ServiceConfigPathFromEnv() string {
 }
 
 // ExceptionClassForStatus returns the exception class for a given remote status code.
-func ExceptionClassForStatus(statusCode int) ex.Class {
+func ExceptionClassForStatus(statusCode int) exception.Class {
 	switch statusCode {
 	case http.StatusNotFound:
 		return ErrNotFound

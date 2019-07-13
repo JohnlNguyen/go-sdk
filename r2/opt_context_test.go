@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestOptContext(t *testing.T) {

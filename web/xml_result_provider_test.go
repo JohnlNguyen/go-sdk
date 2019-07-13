@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestXMLResultProvider(t *testing.T) {
@@ -34,7 +34,7 @@ func TestXMLResultProvider(t *testing.T) {
 
 	internalError := XML.InternalError(fmt.Errorf("only a test"))
 
-	typed, ok := internalError.(*LoggedErrorResult)
+	typed, ok := internalError.(*loggedErrorResult)
 	assert.True(ok)
 	assert.Equal(fmt.Errorf("only a test"), typed.Error)
 	inner := typed.Result.(*XMLResult)

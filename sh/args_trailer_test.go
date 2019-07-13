@@ -3,19 +3,19 @@ package sh
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/assert"
+	"go-sdk/exception"
 )
 
 func TestParseFlagsTrailer(t *testing.T) {
 	assert := assert.New(t)
 
 	parsed, err := ArgsTrailer("foo", "bar")
-	assert.True(ex.Is(err, ErrFlagsNoTrailer))
+	assert.True(exception.Is(err, ErrFlagsNoTrailer))
 	assert.Empty(parsed)
 
 	parsed, err = ArgsTrailer("foo", "bar", "--")
-	assert.True(ex.Is(err, ErrFlagsNoTrailer))
+	assert.True(exception.Is(err, ErrFlagsNoTrailer))
 	assert.Empty(parsed)
 
 	parsed, err = ArgsTrailer("foo", "bar", "--", "echo", "'things'")

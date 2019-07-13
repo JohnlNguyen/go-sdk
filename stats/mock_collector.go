@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/blend/go-sdk/timeutil"
+	"go-sdk/timeutil"
 )
 
 // Assert that the mock collector implements Collector.
@@ -28,7 +28,7 @@ type MockCollector struct {
 }
 
 // AddDefaultTag adds a default tag.
-func (mc *MockCollector) AddDefaultTag(key, value string) {
+func (mc MockCollector) AddDefaultTag(key, value string) {
 	mc.defaultTags = append(mc.defaultTags, fmt.Sprintf("%s:%s", key, value))
 }
 

@@ -3,7 +3,7 @@ package web
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestLocalSessionCache(t *testing.T) {
@@ -12,15 +12,15 @@ func TestLocalSessionCache(t *testing.T) {
 	lsc := NewLocalSessionCache()
 
 	session := &Session{UserID: "bailey", SessionID: NewSessionID()}
-	assert.Nil(lsc.PersistHandler(nil, session))
+	assert.Nil(lsc.PersistHandler(nil, session, nil))
 
-	fetched, err := lsc.FetchHandler(nil, session.SessionID)
+	fetched, err := lsc.FetchHandler(nil, session.SessionID, nil)
 	assert.Nil(err)
 	assert.Equal(session.UserID, fetched.UserID)
 
-	assert.Nil(lsc.RemoveHandler(nil, session.SessionID))
+	assert.Nil(lsc.RemoveHandler(nil, session.SessionID, nil))
 
-	removed, err := lsc.FetchHandler(nil, session.SessionID)
+	removed, err := lsc.FetchHandler(nil, session.SessionID, nil)
 	assert.Nil(err)
 	assert.Nil(removed)
 }

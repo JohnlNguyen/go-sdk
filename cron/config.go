@@ -3,35 +3,46 @@ package cron
 import (
 	"time"
 
-	"github.com/blend/go-sdk/configutil"
+	"go-sdk/configutil"
+	"go-sdk/env"
 )
 
-// Config governs job history retention in memory.
+// NewConfigFromEnv creates a new config from the environment.
+func NewConfigFromEnv() (*Config, error) {
+	var cfg Config
+	if err := env.Env().ReadInto(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// MustNewConfigFromEnv returns a new config set from environment variables,
+// it will panic if there is an error.
+func MustNewConfigFromEnv() *Config {
+	cfg, err := NewConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}
+
+// Config is the config object.
 type Config struct {
-	HistoryMaxCount int           `json:"historyMaxCount" yaml:"historyMaxCount" env:"CRON_HISTORY_MAX_COUNT"`
-	HistoryMaxAge   time.Duration `json:"historyMaxAge" yaml:"historyMaxAge" env:"CRON_HISTORY_MAX_AGE"`
+	History HistoryConfig `json:"history" yaml:"history"`
 }
 
-// Resolve adds extra resolution steps when reading the config.
-func (hc Config) Resolve() error {
-	return configutil.AnyError(
-		configutil.SetInt(&hc.HistoryMaxCount, configutil.Int(hc.HistoryMaxCount), configutil.Parse(configutil.Env("CRON_HISTORY_MAX_COUNT")), configutil.Int(DefaultHistoryMaxCount)),
-		configutil.SetDuration(&hc.HistoryMaxAge, configutil.Duration(hc.HistoryMaxAge), configutil.Parse(configutil.Env("CRON_HISTORY_MAX_AGE")), configutil.Duration(DefaultHistoryMaxAge)),
-	)
+// HistoryConfig governs job history retention in memory.
+type HistoryConfig struct {
+	MaxCount int           `json:"maxCount" yaml:"maxCount" env:"CRON_MAX_COUNT"`
+	MaxAge   time.Duration `json:"maxAge" yaml:"maxAge" env:"CRON_MAX_AGE"`
 }
 
-// HistoryMaxCountOrDefault returns the max count or a default.
-func (hc Config) HistoryMaxCountOrDefault() int {
-	if hc.HistoryMaxCount > 0 {
-		return hc.HistoryMaxCount
-	}
-	return DefaultHistoryMaxCount
+// MaxCountOrDefault returns the max count or a default.
+func (hc HistoryConfig) MaxCountOrDefault() int {
+	return configutil.CoalesceInt(hc.MaxCount, DefaultMaxCount)
 }
 
-// HistoryMaxAgeOrDefault returns the max age or a default.
-func (hc Config) HistoryMaxAgeOrDefault() time.Duration {
-	if hc.HistoryMaxAge > 0 {
-		return hc.HistoryMaxAge
-	}
-	return DefaultHistoryMaxAge
+// MaxAgeOrDefault returns the max age or a default.
+func (hc HistoryConfig) MaxAgeOrDefault() time.Duration {
+	return configutil.CoalesceDuration(hc.MaxAge, DefaultMaxAge)
 }

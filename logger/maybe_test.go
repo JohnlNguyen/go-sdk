@@ -1,82 +1,43 @@
 package logger
 
 import (
-	"bytes"
 	"fmt"
 	"testing"
-
-	"github.com/blend/go-sdk/assert"
 )
 
 func TestMaybeNilLogger(t *testing.T) {
 	MaybeInfof(nil, "")
-	MaybeInfo(nil, "")
+	MaybeSyncInfof(nil, "")
 	MaybeDebugf(nil, "")
-	MaybeDebug(nil, "")
+	MaybeSyncDebugf(nil, "")
 	MaybeWarningf(nil, "")
+	MaybeSyncWarningf(nil, "")
 	MaybeWarning(nil, nil)
+	MaybeSyncWarning(nil, nil)
 	MaybeErrorf(nil, "")
+	MaybeSyncErrorf(nil, "")
 	MaybeError(nil, nil)
+	MaybeSyncError(nil, nil)
 	MaybeFatalf(nil, "")
+	MaybeSyncFatalf(nil, "")
 	MaybeFatal(nil, nil)
+	MaybeSyncFatal(nil, nil)
 }
-
 func TestMaybeLogger(t *testing.T) {
-	assert := assert.New(t)
-
-	log := MustNew(OptAll())
-	log.Formatter = NewTextOutputFormatter(
-		OptTextNoColor(),
-		OptTextHideTimestamp(),
-	)
-
-	buf := new(bytes.Buffer)
-	log.Output = buf
-	MaybeInfof(log, "Infof")
-	assert.Equal("[info] Infof\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeInfo(log, "Info")
-	assert.Equal("[info] Info\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeDebugf(log, "Debugf")
-	assert.Equal("[debug] Debugf\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeDebug(log, "Debug")
-	assert.Equal("[debug] Debug\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeWarningf(log, "Warningf")
-	assert.Equal("[warning] Warningf\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeWarning(log, fmt.Errorf("Warning"))
-	assert.Equal("[warning] Warning\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeErrorf(log, "Errorf")
-	assert.Equal("[error] Errorf\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeError(log, fmt.Errorf("Error"))
-	assert.Equal("[error] Error\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeFatalf(log, "Fatalf")
-	assert.Equal("[fatal] Fatalf\n", buf.String())
-
-	buf = new(bytes.Buffer)
-	log.Output = buf
-	MaybeFatal(log, fmt.Errorf("Fatal"))
-	assert.Equal("[fatal] Fatal\n", buf.String())
+	MaybeInfof(New(), "Infof")
+	MaybeSyncInfof(New(), "SyncInfof")
+	MaybeDebugf(New(), "Debugf")
+	MaybeSyncDebugf(New(), "SyncDebugf")
+	MaybeWarningf(New(), "Warningf")
+	MaybeSyncWarningf(New(), "SyncWarningf")
+	MaybeWarning(New(), fmt.Errorf("Warning"))
+	MaybeSyncWarning(New(), fmt.Errorf("SyncWarning"))
+	MaybeErrorf(New(), "Errorf")
+	MaybeSyncErrorf(New(), "SyncErrorf")
+	MaybeError(New(), fmt.Errorf("Error"))
+	MaybeSyncError(New(), fmt.Errorf("SyncError"))
+	MaybeFatalf(New(), "Fatalf")
+	MaybeSyncFatalf(New(), "SyncFatalf")
+	MaybeFatal(New(), fmt.Errorf("Fatal"))
+	MaybeSyncFatal(New(), fmt.Errorf("SyncFatal"))
 }

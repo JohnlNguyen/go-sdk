@@ -3,7 +3,7 @@ package collections
 import (
 	"testing"
 
-	assert "github.com/blend/go-sdk/assert"
+	assert "go-sdk/assert"
 )
 
 func TestSyncRingBuffer(t *testing.T) {

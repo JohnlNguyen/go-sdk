@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestGetHost(t *testing.T) {

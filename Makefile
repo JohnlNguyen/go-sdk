@@ -1,7 +1,5 @@
 PREFIX			?= $(shell pwd)
 PKGS 			:= $(shell go list ./... | grep -v /vendor/)
-# We don't lint yaml because its forked code and terrible at lint
-LINTPKGS        := $(shell go list ./... | grep -v /vendor/ | grep -v "go-sdk/yaml")
 SHASUMCMD 		:= $(shell command -v sha1sum || command -v shasum; 2> /dev/null)
 TARCMD 			:= $(shell command -v tar || command -v tar; 2> /dev/null)
 GIT_REF 		:= $(shell git log --pretty=format:'%h' -n 1)
@@ -20,19 +18,20 @@ export GIT_REF
 export VERSION
 export DB_SSLMODE
 
-all: ci
+all: format vet profanity test
 
-ci: vet profanity cover-ci
+ci: vet profanity cover
 
-new-install: deps install-all
+new-install: deps install
 
 deps:
-	@go get ./...
+	@go get github.com/lib/pq
+	@go get -u ./...
 
 dev-deps:
 	@go get -d github.com/goreleaser/goreleaser
 
-install-all: install-ask install-coverage install-profanity install-reverseproxy install-recover install-semver install-shamir install-template
+install: install-ask install-coverage install-profanity install-proxy install-recover install-semver install-shamir install-template
 
 install-ask:
 	@go install github.com/blend/go-sdk/cmd/ask
@@ -43,8 +42,8 @@ install-coverage:
 install-profanity:
 	@go install github.com/blend/go-sdk/cmd/profanity
 
-install-reverseproxy:
-	@go install github.com/blend/go-sdk/cmd/reverseproxy
+install-proxy:
+	@go install github.com/blend/go-sdk/cmd/proxy
 
 install-recover:
 	@go install github.com/blend/go-sdk/cmd/recover
@@ -68,7 +67,7 @@ vet:
 
 lint:
 	@echo "$(VERSION)/$(GIT_REF) >> linting code"
-	@golint $(LINTPKGS)
+	@golint $(PKGS)
 
 build:
 	@echo "$(VERSION)/$(GIT_REF) >> linting code"
@@ -78,7 +77,7 @@ build:
 .PHONY: profanity
 profanity:
 	@echo "$(VERSION)/$(GIT_REF) >> profanity"
-	@go run cmd/profanity/main.go --rules PROFANITY_RULES.yml --exclude="cmd/*" --exclude="coverage.html" --exclude="dist/*" --exclude="*/node_modules/*"
+	@go run cmd/profanity/main.go -rules PROFANITY --exclude="cmd/*,coverage.html,dist/*"
 
 test-circleci:
 	@echo "$(VERSION)/$(GIT_REF) >> tests"
@@ -94,19 +93,15 @@ test-verbose:
 
 cover:
 	@echo "$(VERSION)/$(GIT_REF) >> coverage"
-	@go run cmd/coverage/main.go --exclude="examples/*"
-
-cover-ci:
-	@echo "$(VERSION)/$(GIT_REF) >> coverage"
-	@go run cmd/coverage/main.go --keep-coverage-out --covermode=atomic --coverprofile=coverage.txt --exclude="examples/*"
+	@go run cmd/coverage/main.go
 
 cover-enforce:
 	@echo "$(VERSION)/$(GIT_REF) >> coverage"
-	@go run cmd/coverage/main.go -enforce --exclude="examples/*"
+	@go run cmd/coverage/main.go -enforce
 
 cover-update:
 	@echo "$(VERSION)/$(GIT_REF) >> coverage"
-	@go run cmd/coverage/main.go -update --exclude="examples/*"
+	@go run cmd/coverage/main.go -update
 
 increment-patch:
 	@echo "Current Version $(VERSION)"
@@ -138,6 +133,8 @@ clean-cache:
 clean-dist:
 	@rm -rf dist
 
+release: clean-dist tag push-tag release-ask release-coverage release-profanity release-proxy release-recover release-semver release-template
+
 tag:
 	@echo "Tagging v$(VERSION)"
 	@git tag -f v$(VERSION)
@@ -146,16 +143,11 @@ push-tag:
 	@echo "Pushing v$(VERSION) tag to remote"
 	@git push -f origin v$(VERSION)
 
-release-all: clean-dist release-ask release-coverage release-job release-profanity release-proxy release-recover release-semver release-shamir release-template
-
 release-ask:
 	@goreleaser release -f .goreleaser/ask.yml
 
 release-coverage:
 	@goreleaser release -f .goreleaser/coverage.yml
-
-release-job:
-	@goreleaser release -f .goreleaser/job.yml
 
 release-profanity:
 	@goreleaser release -f .goreleaser/profanity.yml
@@ -168,9 +160,6 @@ release-recover:
 
 release-semver:
 	@goreleaser release -f .goreleaser/semver.yml
-
-release-shamir:
-	@goreleaser release -f .goreleaser/shamir.yml
 
 release-template:
 	@goreleaser release -f .goreleaser/template.yml

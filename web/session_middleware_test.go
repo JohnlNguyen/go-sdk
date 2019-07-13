@@ -5,9 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/r2"
-	"github.com/blend/go-sdk/stringutil"
+	"go-sdk/assert"
+	"go-sdk/stringutil"
 )
 
 func TestSessionAware(t *testing.T) {
@@ -18,23 +17,23 @@ func TestSessionAware(t *testing.T) {
 	var didExecuteHandler bool
 	var sessionWasSet bool
 
-	app := New(OptAuth(NewLocalAuthManager()))
-	app.Auth.PersistHandler(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"})
+	app := New().WithAuth(NewLocalAuthManager())
+	app.Auth().PersistHandler()(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"}, nil)
 
 	app.GET("/", func(r *Ctx) Result {
 		didExecuteHandler = true
-		sessionWasSet = r.Session != nil
-		return Text.Result("COOL")
+		sessionWasSet = r.Session() != nil
+		return r.Text().Result("COOL")
 	}, SessionAware)
 
-	meta, err := MockGet(app, "/", r2.OptCookieValue(app.Auth.CookieNameOrDefault(), sessionID)).DiscardWithResponse()
+	meta, err := app.Mock().WithPathf("/").WithCookieValue(app.Auth().CookieName(), sessionID).ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
-	assert.Equal(ContentTypeText, meta.Header.Get(HeaderContentType))
+	assert.Equal(ContentTypeText, meta.Headers.Get(HeaderContentType))
 	assert.True(didExecuteHandler, "we should have triggered the hander")
 	assert.True(sessionWasSet, "the session should have been set by the middleware")
 
-	unsetMeta, err := MockGet(app, "/").DiscardWithResponse()
+	unsetMeta, err := app.Mock().WithPathf("/").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, unsetMeta.StatusCode)
 	assert.False(sessionWasSet)
@@ -46,20 +45,20 @@ func TestSessionRequired(t *testing.T) {
 	sessionID := stringutil.Random(stringutil.LettersAndNumbers, 64)
 
 	var sessionWasSet bool
-	app := New(OptAuth(NewLocalAuthManager()))
-	app.Auth.PersistHandler(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"})
+	app := New().WithAuth(NewLocalAuthManager())
+	app.Auth().PersistHandler()(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"}, nil)
 
 	app.GET("/", func(r *Ctx) Result {
-		sessionWasSet = r.Session != nil
-		return Text.Result("COOL")
+		sessionWasSet = r.Session() != nil
+		return r.Text().Result("COOL")
 	}, SessionRequired)
 
-	unsetMeta, err := MockGet(app, "/").DiscardWithResponse()
+	unsetMeta, err := app.Mock().WithPathf("/").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusForbidden, unsetMeta.StatusCode)
 	assert.False(sessionWasSet)
 
-	meta, err := MockGet(app, "/", r2.OptCookieValue(app.Auth.CookieNameOrDefault(), sessionID)).DiscardWithResponse()
+	meta, err := app.Mock().WithPathf("/").WithCookieValue(app.Auth().CookieName(), sessionID).ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.True(sessionWasSet)
@@ -71,26 +70,26 @@ func TestSessionRequiredCustomParamName(t *testing.T) {
 	sessionID := stringutil.Random(stringutil.LettersAndNumbers, 64)
 
 	var sessionWasSet bool
-	app := New(OptAuth(NewLocalAuthManager()))
-	app.Auth.PersistHandler(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"})
-	app.Auth.CookieName = "web_auth"
+	app := New().WithAuth(NewLocalAuthManager())
+	app.Auth().PersistHandler()(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"}, nil)
+	app.Auth().WithCookieName("web_auth")
 
 	app.GET("/", func(r *Ctx) Result {
-		sessionWasSet = r.Session != nil
-		return Text.Result("COOL")
+		sessionWasSet = r.Session() != nil
+		return r.Text().Result("COOL")
 	}, SessionRequired)
 
-	unsetMeta, err := MockGet(app, "/").DiscardWithResponse()
+	unsetMeta, err := app.Mock().WithPathf("/").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusForbidden, unsetMeta.StatusCode)
 	assert.False(sessionWasSet)
 
-	meta, err := MockGet(app, "/", r2.OptCookieValue(app.Auth.CookieNameOrDefault(), sessionID)).DiscardWithResponse()
+	meta, err := app.Mock().WithPathf("/").WithCookieValue(app.Auth().CookieName(), sessionID).ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.True(sessionWasSet)
 
-	meta, err = MockGet(app, "/", r2.OptCookieValue(DefaultCookieName, sessionID)).DiscardWithResponse()
+	meta, err = app.Mock().WithPathf("/").WithCookieValue(DefaultCookieName, sessionID).ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusForbidden, meta.StatusCode)
 	assert.True(sessionWasSet)
@@ -102,30 +101,27 @@ func TestSessionMiddleware(t *testing.T) {
 	sessionID := stringutil.Random(stringutil.LettersAndNumbers, 64)
 
 	var sessionWasSet bool
-	app := New(OptAuth(NewLocalAuthManager()), OptBindAddr(DefaultMockBindAddr))
-	app.Auth.PersistHandler(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"})
-
-	go app.Start()
-	<-app.NotifyStarted()
-	defer app.Stop()
+	app := New().WithAuth(NewLocalAuthManager())
+	app.Auth().PersistHandler()(context.TODO(), &Session{SessionID: sessionID, UserID: "bailey"}, nil)
 
 	var calledCustom bool
 	app.GET("/", func(r *Ctx) Result {
-		sessionWasSet = r.Session != nil
-		return Text.Result("COOL")
+		sessionWasSet = r.Session() != nil
+		return r.Text().Result("COOL")
 	}, SessionMiddleware(func(_ *Ctx) Result {
 		calledCustom = true
 		return NoContent
 	}))
 
-	unsetMeta, err := MockGet(app, "/").DiscardWithResponse()
+	unsetMeta, err := app.Mock().WithPathf("/").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusNoContent, unsetMeta.StatusCode)
 	assert.False(sessionWasSet)
 
-	meta, err := MockGet(app, "/", r2.OptCookieValue(app.Auth.CookieNameOrDefault(), sessionID)).DiscardWithResponse()
+	meta, err := app.Mock().WithPathf("/").WithCookieValue(app.Auth().CookieName(), sessionID).ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.True(sessionWasSet)
+
 	assert.True(calledCustom)
 }

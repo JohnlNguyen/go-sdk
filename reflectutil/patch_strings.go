@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // PatchStrings options.
@@ -31,7 +31,7 @@ type PatchStringer interface {
 func PatchStrings(tagName string, data map[string]string, obj interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = ex.New(r)
+			err = exception.New(r)
 		}
 	}()
 
@@ -113,7 +113,7 @@ func PatchStrings(tagName string, data map[string]string, obj interface{}) (err 
 				case typeDuration:
 					dataFieldValue, err = time.ParseDuration(dataValue)
 					if err != nil {
-						err = ex.New(err)
+						err = exception.New(err)
 						return
 					}
 				default:
@@ -127,77 +127,77 @@ func PatchStrings(tagName string, data map[string]string, obj interface{}) (err 
 					case reflect.Float32:
 						dataFieldValue, err = strconv.ParseFloat(dataValue, 32)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Float64:
 						dataFieldValue, err = strconv.ParseFloat(dataValue, 64)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Int8:
 						dataFieldValue, err = strconv.ParseInt(dataValue, 10, 8)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Int16:
 						dataFieldValue, err = strconv.ParseInt(dataValue, 10, 16)
 						if err != nil {
-							return ex.New(err)
+							return exception.New(err)
 						}
 					case reflect.Int32:
 						dataFieldValue, err = strconv.ParseInt(dataValue, 10, 32)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Int:
 						dataFieldValue, err = strconv.ParseInt(dataValue, 10, 64)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Int64:
 						dataFieldValue, err = strconv.ParseInt(dataValue, 10, 64)
 						if err != nil {
-							return ex.New(err)
+							return exception.New(err)
 						}
 					case reflect.Uint8:
 						dataFieldValue, err = strconv.ParseUint(dataValue, 10, 8)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Uint16:
 						dataFieldValue, err = strconv.ParseUint(dataValue, 10, 8)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Uint32:
 						dataFieldValue, err = strconv.ParseUint(dataValue, 10, 32)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Uint64:
 						dataFieldValue, err = strconv.ParseUint(dataValue, 10, 64)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.Uint, reflect.Uintptr:
 						dataFieldValue, err = strconv.ParseUint(dataValue, 10, 64)
 						if err != nil {
-							err = ex.New(err)
+							err = exception.New(err)
 							return
 						}
 					case reflect.String:
 						dataFieldValue = dataValue
 					default:
-						err = ex.New("map strings into; unhandled assignment", ex.OptMessagef("type %s", fieldType.String()))
+						err = exception.New("map strings into; unhandled assignment").WithMessagef("type %s", fieldType.String())
 						return
 					}
 				}
@@ -205,7 +205,7 @@ func PatchStrings(tagName string, data map[string]string, obj interface{}) (err 
 
 			value := reflectValue(dataFieldValue)
 			if !value.IsValid() {
-				err = ex.New("invalid value", ex.OptMessagef("%s `%s`", objMeta.Name(), field.Name))
+				err = exception.New("invalid value").WithMessagef("%s `%s`", objMeta.Name(), field.Name)
 				return
 			}
 
@@ -214,7 +214,7 @@ func PatchStrings(tagName string, data map[string]string, obj interface{}) (err 
 				return
 			}
 			if !assigned {
-				err = ex.New("cannot set field", ex.OptMessagef("%s `%s`", objMeta.Name(), field.Name))
+				err = exception.New("cannot set field").WithMessagef("%s `%s`", objMeta.Name(), field.Name)
 				return
 			}
 		}
@@ -263,5 +263,5 @@ func parseBool(str string) (bool, error) {
 	case "false", "0", "no":
 		return false, nil
 	}
-	return false, ex.New("invalid bool value", ex.OptMessage(str))
+	return false, exception.New("invalid bool value").WithMessage(str)
 }

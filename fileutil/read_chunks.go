@@ -4,14 +4,14 @@ import (
 	"io"
 	"os"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // ReadChunks reads a file in `chunkSize` pieces, dispatched to the handler.
 func ReadChunks(filePath string, chunkSize int, handler func([]byte) error) error {
 	f, err := os.Open(filePath)
 	if err != nil {
-		return ex.New(err)
+		return exception.New(err)
 	}
 	defer f.Close()
 
@@ -24,7 +24,7 @@ func ReadChunks(filePath string, chunkSize int, handler func([]byte) error) erro
 		readData := chunk[:readBytes]
 		err = handler(readData)
 		if err != nil {
-			return ex.New(err)
+			return exception.New(err)
 		}
 	}
 	return nil

@@ -8,17 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/blend/go-sdk/sh"
-	"github.com/blend/go-sdk/yaml"
-)
-
-// linker metadata block
-// this block must be present
-// it is used by goreleaser
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	"go-sdk/sh"
+	"go-sdk/yaml"
 )
 
 type configVar struct {

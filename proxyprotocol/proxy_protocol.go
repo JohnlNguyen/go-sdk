@@ -35,7 +35,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 var (
@@ -45,7 +45,7 @@ var (
 	prefixLen = len(prefix)
 
 	// ErrInvalidUpstream is a common error.
-	ErrInvalidUpstream ex.Class = "upstream connection address not trusted for PROXY information"
+	ErrInvalidUpstream exception.Class = "upstream connection address not trusted for PROXY information"
 )
 
 // SourceChecker can be used to decide whether to trust the PROXY info or pass

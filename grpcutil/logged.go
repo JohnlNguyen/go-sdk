@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/logger"
 )
 
 // LoggedUnary returns a unary server interceptor.
@@ -17,13 +17,13 @@ func LoggedUnary(log logger.Triggerable) grpc.UnaryServerInterceptor {
 		result, err := handler(ctx, args)
 		if log != nil {
 			event := logger.NewRPCEvent(info.FullMethod, time.Now().UTC().Sub(startTime))
-			event.Err = err
+			event = event.WithErr(err)
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
-				event.Authority = MetaValue(md, MetaTagAuthority)
-				event.UserAgent = MetaValue(md, MetaTagUserAgent)
-				event.ContentType = MetaValue(md, MetaTagContentType)
+				event = event.WithAuthority(MetaValue(md, MetaTagAuthority)).
+					WithUserAgent(MetaValue(md, MetaTagUserAgent)).
+					WithContentType(MetaValue(md, MetaTagContentType))
 			}
-			log.Trigger(ctx, event)
+			log.Trigger(event)
 		}
 		return result, err
 	}
@@ -35,14 +35,13 @@ func LoggedStreaming(log logger.Triggerable) grpc.StreamServerInterceptor {
 		startTime := time.Now().UTC()
 		err = handler(srv, stream)
 		if log != nil {
-			event := logger.NewRPCEvent(info.FullMethod, time.Now().UTC().Sub(startTime))
-			event.Err = err
+			event := logger.NewRPCEvent(info.FullMethod, time.Now().UTC().Sub(startTime)).WithErr(err)
 			if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
-				event.Authority = MetaValue(md, MetaTagAuthority)
-				event.UserAgent = MetaValue(md, MetaTagUserAgent)
-				event.ContentType = MetaValue(md, MetaTagContentType)
+				event = event.WithAuthority(MetaValue(md, MetaTagAuthority)).
+					WithUserAgent(MetaValue(md, MetaTagUserAgent)).
+					WithContentType(MetaValue(md, MetaTagContentType))
 			}
-			log.Trigger(context.Background(), event)
+			log.Trigger(event)
 		}
 		return err
 	}

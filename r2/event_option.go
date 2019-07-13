@@ -4,23 +4,23 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/logger"
 )
 
 // EventOption is an event option.
 type EventOption func(e *Event)
 
 // OptEventFlag sets the event flag.
-func OptEventFlag(flag string) EventOption {
+func OptEventFlag(flag logger.Flag) EventOption {
 	return func(e *Event) {
-		logger.OptEventMetaFlag(flag)(e.EventMeta)
+		e.SetFlag(flag)
 	}
 }
 
 // OptEventCompleted sets the event completed time.
 func OptEventCompleted(ts time.Time) EventOption {
 	return func(e *Event) {
-		logger.OptEventMetaTimestamp(ts)(e.EventMeta)
+		e.SetTimestamp(ts)
 	}
 }
 

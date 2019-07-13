@@ -2,28 +2,19 @@ package web
 
 import (
 	"bytes"
-	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/assert"
+	"go-sdk/env"
+	"go-sdk/exception"
+	"go-sdk/webutil"
 )
 
 type testViewModel struct {
 	Text string
-}
-
-type errorWriter struct {
-	ResponseWriter
-}
-
-func (ew *errorWriter) Write(_ []byte) (int, error) {
-	return -1, fmt.Errorf("error")
 }
 
 func TestViewResultRender(t *testing.T) {
@@ -32,7 +23,7 @@ func TestViewResultRender(t *testing.T) {
 	buffer := bytes.NewBuffer([]byte{})
 	rc := NewCtx(webutil.NewMockResponse(buffer), nil)
 
-	assert.True(ex.Is((&ViewResult{}).Render(nil), ErrUnsetViewTemplate))
+	assert.True(exception.Is((&ViewResult{}).Render(nil), ErrUnsetViewTemplate))
 
 	testView := template.New("testView")
 	testView.Parse("{{ .ViewModel.Text }}")
@@ -59,7 +50,7 @@ func TestViewResultRender(t *testing.T) {
 		env.SetEnv(curr)
 	}()
 
-	env.SetEnv(env.New())
+	env.SetEnv(env.NewVars())
 	env.Env().Set("HELLO", expected)
 
 	vr = &ViewResult{
@@ -73,29 +64,6 @@ func TestViewResultRender(t *testing.T) {
 
 	assert.NotZero(buffer.Len())
 	assert.True(strings.Contains(buffer.String(), expected))
-}
-
-func TestViewResultRenderErrorResponse(t *testing.T) {
-	assert := assert.New(t)
-
-	buffer := bytes.NewBuffer([]byte{})
-	rc := NewCtx(webutil.NewMockResponse(buffer), nil)
-
-	assert.True(ex.Is((&ViewResult{}).Render(nil), ErrUnsetViewTemplate))
-
-	testView := template.New("testView")
-	testView.Parse("{{ .ViewModel.Text }}")
-
-	vr := &ViewResult{
-		StatusCode: http.StatusOK,
-		ViewModel:  testViewModel{Text: "bar"},
-		Template:   testView,
-	}
-
-	rc.Response = &errorWriter{ResponseWriter: rc.Response}
-
-	err := vr.Render(rc)
-	assert.NotNil(err)
 }
 
 func TestViewResultRenderError(t *testing.T) {

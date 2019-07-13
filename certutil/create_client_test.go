@@ -3,14 +3,14 @@ package certutil
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/uuid"
+	"go-sdk/assert"
+	"go-sdk/uuid"
 )
 
 func TestCreateClient(t *testing.T) {
 	assert := assert.New(t)
 
-	ca, err := CreateCertificateAuthority()
+	ca, err := CreateCA()
 	assert.Nil(err)
 
 	uid := uuid.V4().String()

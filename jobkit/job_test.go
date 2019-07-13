@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/ref"
-	"github.com/blend/go-sdk/slack"
-	"github.com/blend/go-sdk/uuid"
+	"go-sdk/assert"
+	"go-sdk/cron"
+	"go-sdk/ref"
+	"go-sdk/slack"
+	"go-sdk/uuid"
 )
 
 func TestJobProperties(t *testing.T) {
 	assert := assert.New(t)
 
-	job := (&Job{action: func(_ context.Context) error {
+	job := (&Job{config: &JobConfig{}, action: func(_ context.Context) error {
 		return nil
 	}})
 	assert.NotNil(job.action)
@@ -79,7 +79,7 @@ func TestJobLifecycleHooksNotificationsSetDisabled(t *testing.T) {
 
 	job := &Job{
 		slackClient: slack.MockWebhookSender(slackMessages),
-		config: JobConfig{
+		config: &JobConfig{
 			NotifyOnStart:   ref.Bool(false),
 			NotifyOnSuccess: ref.Bool(false),
 			NotifyOnFailure: ref.Bool(false),
@@ -120,7 +120,7 @@ func TestJobLifecycleHooksNotificationsSetEnabled(t *testing.T) {
 
 	job := &Job{
 		slackClient: slack.MockWebhookSender(slackMessages),
-		config: JobConfig{
+		config: &JobConfig{
 			NotifyOnStart:   ref.Bool(true),
 			NotifyOnSuccess: ref.Bool(true),
 			NotifyOnFailure: ref.Bool(true),

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/blend/go-sdk/env"
+	"go-sdk/env"
 )
 
 // Viewmodel is the template viewmodel.

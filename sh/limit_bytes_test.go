@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/assert"
+	"go-sdk/exception"
 )
 
 func TestMaxBytesWriter(t *testing.T) {
@@ -25,7 +25,7 @@ func TestMaxBytesWriter(t *testing.T) {
 	assert.Equal(16, written)
 
 	written, err = mbw.Write(makeChunk(32))
-	assert.True(ex.Is(err, ErrMaxBytesWriterCapacityLimit))
+	assert.True(exception.Is(err, ErrMaxBytesWriterCapacityLimit))
 	assert.Equal(0, written)
 }
 

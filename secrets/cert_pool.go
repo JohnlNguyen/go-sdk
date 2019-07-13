@@ -4,7 +4,7 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // NewCertPool creates a new cert pool.
@@ -12,7 +12,7 @@ import (
 func NewCertPool() (*CertPool, error) {
 	system, err := x509.SystemCertPool()
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	return &CertPool{
 		pool: system,
@@ -34,10 +34,10 @@ func (cp *CertPool) AddPaths(paths ...string) error {
 	for _, path := range paths {
 		cert, err := ioutil.ReadFile(path)
 		if err != nil {
-			return ex.New(err)
+			return exception.New(err)
 		}
 		if ok := cp.pool.AppendCertsFromPEM(cert); !ok {
-			return ex.New("append cert failed", ex.OptMessagef("cert path: %s", path))
+			return exception.New("append cert failed").WithMessagef("cert path: %s", path)
 		}
 	}
 	return nil

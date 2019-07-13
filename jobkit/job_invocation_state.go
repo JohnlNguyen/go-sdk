@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/blend/go-sdk/cron"
+	"go-sdk/cron"
 )
 
 // WithJobInvocationState sets the job invocation state on a context.

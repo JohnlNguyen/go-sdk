@@ -4,7 +4,7 @@ import (
 	"crypto/subtle"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // Claims are a type that must just have a Valid method that determines
@@ -35,15 +35,15 @@ func (c StandardClaims) Valid() error {
 
 	if c.VerifyExpiresAt(now, false) == false {
 		delta := time.Unix(now, 0).Sub(time.Unix(c.ExpiresAt, 0))
-		return ex.New(ErrValidationExpired, ex.OptMessagef("token is expired by %v", delta))
+		return exception.New(ErrValidationExpired).WithMessagef("token is expired by %v", delta)
 	}
 
 	if c.VerifyIssuedAt(now, false) == false {
-		return ex.New(ErrValidationIssued)
+		return exception.New(ErrValidationIssued)
 	}
 
 	if c.VerifyNotBefore(now, false) == false {
-		return ex.New(ErrValidationNotBefore)
+		return exception.New(ErrValidationNotBefore)
 	}
 	return nil
 }

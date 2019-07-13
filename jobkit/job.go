@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/diagnostics"
-	"github.com/blend/go-sdk/email"
-	"github.com/blend/go-sdk/logger"
-	"github.com/blend/go-sdk/slack"
-	"github.com/blend/go-sdk/stats"
+	"go-sdk/cron"
+	"go-sdk/diagnostics"
+	"go-sdk/email"
+	"go-sdk/logger"
+	"go-sdk/slack"
+	"go-sdk/stats"
 )
 
 var (
@@ -31,13 +31,13 @@ var (
 type Job struct {
 	name        string
 	description string
-	config      JobConfig
+	config      *JobConfig
 
 	schedule cron.Schedule
 	timeout  time.Duration
 	action   func(context.Context) error
 
-	log         logger.Log
+	log         logger.FullReceiver
 	statsClient stats.Collector
 	slackClient slack.Sender
 	emailClient email.Sender
@@ -49,7 +49,7 @@ func (job Job) Name() string {
 	if job.name != "" {
 		return job.name
 	}
-	return job.config.Name
+	return job.config.NameOrDefault()
 }
 
 // WithName sets the name.
@@ -81,12 +81,12 @@ func (job *Job) WithSchedule(schedule cron.Schedule) *Job {
 }
 
 // Config returns the job config.
-func (job Job) Config() JobConfig {
+func (job Job) Config() *JobConfig {
 	return job.config
 }
 
 // WithConfig sets the config.
-func (job *Job) WithConfig(cfg JobConfig) *Job {
+func (job *Job) WithConfig(cfg *JobConfig) *Job {
 	job.config = cfg
 	return job
 }
@@ -103,7 +103,7 @@ func (job *Job) WithTimeout(d time.Duration) *Job {
 }
 
 // WithLogger sets the job logger.
-func (job *Job) WithLogger(log logger.Log) *Job {
+func (job *Job) WithLogger(log logger.FullReceiver) *Job {
 	job.log = log
 	return job
 }
@@ -134,61 +134,61 @@ func (job *Job) WithErrorClient(client diagnostics.Notifier) *Job {
 
 // OnStart is a lifecycle event handler.
 func (job Job) OnStart(ctx context.Context) {
-	if job.config.NotifyOnStartOrDefault() {
+	if job.config != nil && job.config.NotifyOnStartOrDefault() {
 		job.notify(ctx, cron.FlagStarted)
 	}
 }
 
 // OnComplete is a lifecycle event handler.
 func (job Job) OnComplete(ctx context.Context) {
-	if job.config.NotifyOnSuccessOrDefault() {
+	if job.config != nil && job.config.NotifyOnSuccessOrDefault() {
 		job.notify(ctx, cron.FlagComplete)
 	}
 }
 
 // OnFailure is a lifecycle event handler.
 func (job Job) OnFailure(ctx context.Context) {
-	if job.config.NotifyOnFailureOrDefault() {
+	if job.config != nil && job.config.NotifyOnFailureOrDefault() {
 		job.notify(ctx, cron.FlagFailed)
 	}
 }
 
 // OnBroken is a lifecycle event handler.
 func (job Job) OnBroken(ctx context.Context) {
-	if job.config.NotifyOnBrokenOrDefault() {
+	if job.config != nil && job.config.NotifyOnBrokenOrDefault() {
 		job.notify(ctx, cron.FlagBroken)
 	}
 }
 
 // OnFixed is a lifecycle event handler.
 func (job Job) OnFixed(ctx context.Context) {
-	if job.config.NotifyOnFixedOrDefault() {
+	if job.config != nil && job.config.NotifyOnFixedOrDefault() {
 		job.notify(ctx, cron.FlagFixed)
 	}
 }
 
 // OnCancellation is a lifecycle event handler.
 func (job Job) OnCancellation(ctx context.Context) {
-	if job.config.NotifyOnFailureOrDefault() {
+	if job.config != nil && job.config.NotifyOnFailureOrDefault() {
 		job.notify(ctx, cron.FlagCancelled)
 	}
 }
 
 // OnEnabled is a lifecycle event handler.
 func (job Job) OnEnabled(ctx context.Context) {
-	if job.config.NotifyOnEnabledOrDefault() {
+	if job.config != nil && job.config.NotifyOnEnabledOrDefault() {
 		job.notify(ctx, cron.FlagEnabled)
 	}
 }
 
 // OnDisabled is a lifecycle event handler.
 func (job Job) OnDisabled(ctx context.Context) {
-	if job.config.NotifyOnDisabledOrDefault() {
+	if job.config != nil && job.config.NotifyOnDisabledOrDefault() {
 		job.notify(ctx, cron.FlagDisabled)
 	}
 }
 
-func (job Job) notify(ctx context.Context, flag string) {
+func (job Job) notify(ctx context.Context, flag logger.Flag) {
 	if job.statsClient != nil {
 		job.statsClient.Increment(string(flag), fmt.Sprintf("%s:%s", stats.TagJob, job.Name()))
 		if ji := cron.GetJobInvocation(ctx); ji != nil {

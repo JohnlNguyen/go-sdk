@@ -1,24 +1,22 @@
 package db
 
 import (
-	"github.com/blend/go-sdk/uuid"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestQueryExecute(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
 	seedErr := seedObjects(10, tx)
 	a.Nil(seedErr)
 
-	rows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Execute()
+	rows, err := Default().QueryInTx("select * from bench_object", tx).Execute()
 	a.Nil(err)
 	defer rows.Close()
 	a.True(rows.Next())
@@ -27,7 +25,7 @@ func TestQueryExecute(t *testing.T) {
 
 func TestQueryEach(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
@@ -36,7 +34,7 @@ func TestQueryEach(t *testing.T) {
 
 	var all []benchObj
 	var popErr error
-	err = defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Each(func(r Rows) error {
+	err = Default().QueryInTx("select * from bench_object", tx).Each(func(r Rows) error {
 		bo := benchObj{}
 		popErr = bo.Populate(r)
 		if popErr != nil {
@@ -51,7 +49,7 @@ func TestQueryEach(t *testing.T) {
 
 func TestQueryAny(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
@@ -59,24 +57,24 @@ func TestQueryAny(t *testing.T) {
 	a.Nil(err)
 
 	var all []benchObj
-	allErr := defaultDB().Invoke(OptTx(tx)).All(&all)
+	allErr := Default().GetAllInTx(&all, tx)
 	a.Nil(allErr)
 	a.NotEmpty(all)
 
 	obj := all[0]
 
-	exists, err := defaultDB().Invoke(OptTx(tx)).Query("select 1 from bench_object where id = $1", obj.ID).Any()
+	exists, err := Default().QueryInTx("select 1 from bench_object where id = $1", tx, obj.ID).Any()
 	a.Nil(err)
 	a.True(exists)
 
-	notExists, err := defaultDB().Invoke(OptTx(tx)).Query("select 1 from bench_object where id = $1", -1).Any()
+	notExists, err := Default().QueryInTx("select 1 from bench_object where id = $1", tx, -1).Any()
 	a.Nil(err)
 	a.False(notExists)
 }
 
 func TestQueryNone(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
@@ -84,80 +82,80 @@ func TestQueryNone(t *testing.T) {
 	a.Nil(seedErr)
 
 	var all []benchObj
-	allErr := defaultDB().Invoke(OptTx(tx)).All(&all)
+	allErr := Default().GetAllInTx(&all, tx)
 	a.Nil(allErr)
 	a.NotEmpty(all)
 
 	obj := all[0]
 
-	exists, existsErr := defaultDB().Invoke(OptTx(tx)).Query("select 1 from bench_object where id = $1", obj.ID).None()
+	exists, existsErr := Default().QueryInTx("select 1 from bench_object where id = $1", tx, obj.ID).None()
 	a.Nil(existsErr)
 	a.False(exists)
 
-	notExists, notExistsErr := defaultDB().Invoke(OptTx(tx)).Query("select 1 from bench_object where id = $1", -1).None()
+	notExists, notExistsErr := Default().QueryInTx("select 1 from bench_object where id = $1", tx, -1).None()
 	a.Nil(notExistsErr)
 	a.True(notExists)
 }
 
 func TestQueryPanicHandling(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
 	err = seedObjects(10, tx)
 	a.Nil(err)
 
-	err = defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Each(func(r Rows) error {
+	err = Default().QueryInTx("select * from bench_object", tx).Each(func(r Rows) error {
 		panic("THIS IS A TEST PANIC")
 	})
 	a.NotNil(err) // this should have the result of the panic
 
 	// we now test to see if the connection is still in a good state, i.e. that we recovered from the panic
 	// and closed the connection / rows / statement
-	hasRows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Any()
+	hasRows, err := Default().QueryInTx("select * from bench_object", tx).Any()
 	a.Nil(err)
 	a.True(hasRows)
 }
 
 func TestMultipleQueriesPerTransaction(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
-	a.NotNil(defaultDB().Connection)
+	a.NotNil(Default().Connection())
 
 	err = seedObjects(10, nil)
 	a.Nil(err)
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Query("select * from bench_object").Any()
+		hasRows, err := Default().Query("select * from bench_object").Any()
 		a.Nil(err)
 		a.True(hasRows)
 	}()
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Query("select * from bench_object").Any()
+		hasRows, err := Default().Query("select * from bench_object").Any()
 		a.Nil(err)
 		a.True(hasRows)
 	}()
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Query("select * from bench_object").Any()
+		hasRows, err := Default().Query("select * from bench_object").Any()
 		a.Nil(err)
 		a.True(hasRows)
 	}()
 
 	wg.Wait()
 
-	hasRows, err := defaultDB().Query("select * from bench_object").Any()
+	hasRows, err := Default().Query("select * from bench_object").Any()
 	a.Nil(err)
 	a.True(hasRows)
 }
@@ -169,38 +167,38 @@ func TestMultipleQueriesPerTransactionWithFailure(t *testing.T) {
 	t.Skip()
 
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
-	a.NotNil(defaultDB().Connection)
+	a.NotNil(Default().Connection)
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Any()
+		hasRows, err := Default().QueryInTx("select * from bench_object", tx).Any()
 		a.NotNil(err)
 		a.False(hasRows)
 	}()
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Any()
+		hasRows, err := Default().QueryInTx("select * from bench_object", tx).Any()
 		a.NotNil(err)
 		a.False(hasRows)
 	}()
 
 	go func() {
 		defer wg.Done()
-		hasRows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Any()
+		hasRows, err := Default().QueryInTx("select * from bench_object", tx).Any()
 		a.NotNil(err)
 		a.False(hasRows)
 	}()
 
 	wg.Wait()
-	hasRows, err := defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").Any()
+	hasRows, err := Default().QueryInTx("select * from bench_object", tx).Any()
 
 	a.NotNil(err)
 	a.False(hasRows)
@@ -208,7 +206,7 @@ func TestMultipleQueriesPerTransactionWithFailure(t *testing.T) {
 
 func TestQueryFirst(t *testing.T) {
 	a := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	a.Nil(err)
 	defer tx.Rollback()
 
@@ -216,7 +214,7 @@ func TestQueryFirst(t *testing.T) {
 	a.Nil(seedErr)
 
 	var first benchObj
-	err = defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").First(func(r Rows) error {
+	err = Default().QueryInTx("select * from bench_object", tx).First(func(r Rows) error {
 		return first.Populate(r)
 	})
 	a.Nil(err)
@@ -225,120 +223,38 @@ func TestQueryFirst(t *testing.T) {
 
 func TestQueryExists(t *testing.T) {
 	assert := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	assert.Nil(err)
 	defer tx.Rollback()
 
 	var first benchObj
-	err = defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").First(func(r Rows) error {
+	err = Default().QueryInTx("select * from bench_object", tx).First(func(r Rows) error {
 		return first.Populate(r)
 	})
 	assert.Nil(err)
 	assert.Equal(1, first.ID)
 
-	exists, err := defaultDB().Invoke(OptTx(tx)).Exists(&first)
+	exists, err := Default().ExistsInTx(&first, tx)
 	assert.Nil(err)
 	assert.True(exists)
 
 	var invalid benchObj
-	exists, err = defaultDB().Invoke(OptTx(tx)).Exists(&invalid)
+	exists, err = Default().ExistsInTx(&invalid, tx)
 	assert.Nil(err)
 	assert.False(exists)
 }
 
 func TestQueryQueryPopulateByname(t *testing.T) {
 	assert := assert.New(t)
-	tx, err := defaultDB().Begin()
+	tx, err := Default().Begin()
 	assert.Nil(err)
 	defer tx.Rollback()
 
 	var first benchObj
 	cols := Columns(first)
-	err = defaultDB().Invoke(OptTx(tx)).Query("select * from bench_object").First(func(r Rows) error {
-		return PopulateByName(&first, r, cols, true)
+	err = Default().QueryInTx("select * from bench_object", tx).First(func(r Rows) error {
+		return PopulateByName(&first, r, cols)
 	})
 	assert.Nil(err)
 	assert.Equal(1, first.ID)
-}
-
-type benchWithPointer struct {
-	ID        int       `db:"id,pk,auto"`
-	UUID      string    `db:"uuid,nullable,uk"`
-	Name      string    `db:"name"`
-	Timestamp *time.Time `db:"timestamp_utc"`
-	Amount    float32   `db:"amount"`
-	Pending   bool      `db:"pending"`
-	Category  string    `db:"category"`
-}
-
-func (t benchWithPointer) TableName() string {
-	return "bench_object"
-}
-
-func TestOutWithDirtyStructs(t *testing.T) {
-	assert := assert.New(t)
-	tx, err := defaultDB().Begin()
-	assert.Nil(err)
-	defer tx.Rollback()
-
-	err = createTable(tx)
-	assert.Nil(err)
-
-	uniq := uuid.V4().ToFullString()
-
-	i, err := defaultDB().Invoke(OptTx(tx)).Exec("INSERT INTO bench_object (uuid, name, category) VALUES ($1, $2, $3)",
-		uniq, "Foo", "Bar")
-	assert.Nil(err)
-	assert.Equal(1,i)
-
-	timeObj := time.Now()
-
-	dirty := benchWithPointer{
-		ID: 192,
-		UUID: uuid.V4().ToFullString(),
-		Name: "Widget",
-		Timestamp: &timeObj,
-		Amount: 4.99,
-		Category: "Baz",
-	}
-
-	b, err := defaultDB().Invoke(OptTx(tx)).Query("SELECT * FROM bench_object WHERE uuid = $1", uniq).Out(&dirty)
-	assert.Nil(err)
-	assert.True(b)
-	assert.Nil(dirty.Timestamp)
-	assert.True(dirty.Amount == 0)
-}
-
-func TestIntoWithDirtyStructs(t *testing.T) {
-	assert := assert.New(t)
-	tx, err := defaultDB().Begin()
-	assert.Nil(err)
-	defer tx.Rollback()
-
-	err = createTable(tx)
-	assert.Nil(err)
-
-	uniq := uuid.V4().ToFullString()
-
-	i, err := defaultDB().Invoke(OptTx(tx)).Exec("INSERT INTO bench_object (uuid, name, category) VALUES ($1, $2, $3)",
-		uniq, "Foo", "Bar")
-	assert.Nil(err)
-	assert.Equal(1,i)
-
-	timeObj := time.Now()
-
-	dirty := benchWithPointer{
-		ID: 192,
-		UUID: uuid.V4().ToFullString(),
-		Name: "Widget",
-		Timestamp: &timeObj,
-		Amount: 4.99,
-		Category: "Baz",
-	}
-
-	b, err := defaultDB().Invoke(OptTx(tx)).Query("SELECT * FROM bench_object WHERE uuid = $1", uniq).Into(&dirty)
-	assert.Nil(err)
-	assert.True(b)
-	assert.NotNil(dirty.Timestamp)
-	assert.True(dirty.Amount == 4.99)
 }

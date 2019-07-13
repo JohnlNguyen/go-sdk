@@ -17,5 +17,5 @@ type ViewTracer interface {
 
 // ViewTraceFinisher is a finisher for view traces.
 type ViewTraceFinisher interface {
-	FinishView(*Ctx, *ViewResult, error)
+	Finish(*Ctx, *ViewResult, error)
 }

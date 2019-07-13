@@ -2,50 +2,31 @@ package logger
 
 import "time"
 
-// Flags
 const (
-	FlagAll      = "all"
-	FlagNone     = "none"
-	Fatal        = "fatal"
-	Error        = "error"
-	Warning      = "warning"
-	Debug        = "debug"
-	Info         = "info"
-	HTTPRequest  = "http.request"
-	HTTPResponse = "http.response"
-	Audit        = "audit"
-	Query        = "db.query"
-	RPC          = "rpc"
+	// Gigabyte is an SI unit.
+	Gigabyte int = 1 << 30
+	// Megabyte is an SI unit.
+	Megabyte int = 1 << 20
+	// Kilobyte is an SI unit.
+	Kilobyte int = 1 << 10
 )
 
-// Output Formats
 const (
-	FormatJSON = "json"
-	FormatText = "text"
-)
-
-// Default flags
-var (
-	DefaultFlags         = []string{Info, Error, Fatal}
-	DefaultListenerName  = "default"
-	DefaultRecoverPanics = true
-)
-
-// Environment Variable Names
-const (
-	EnvVarFlags      = "LOG_FLAGS"
-	EnvVarFormat     = "LOG_FORMAT"
-	EnvVarNoColor    = "NO_COLOR"
-	EnvVarHideTime   = "LOG_HIDE_TIME"
-	EnvVarTimeFormat = "LOG_TIME_FORMAT"
-	EnvVarJSONPretty = "LOG_JSON_PRETTY"
+	// LoggerStarted is a logger state.
+	LoggerStarted int32 = 0
+	// LoggerStopping is a logger state.
+	LoggerStopping int32 = 1
+	// LoggerStopped is a logger state.
+	LoggerStopped int32 = 2
 )
 
 const (
 	// DefaultBufferPoolSize is the default buffer pool size.
 	DefaultBufferPoolSize = 1 << 8 // 256
+
 	// DefaultTextTimeFormat is the default time format.
 	DefaultTextTimeFormat = time.RFC3339Nano
+
 	// DefaultTextWriterUseColor is a default setting for writers.
 	DefaultTextWriterUseColor = true
 	// DefaultTextWriterShowHeadings is a default setting for writers.
@@ -54,27 +35,22 @@ const (
 	DefaultTextWriterShowTimestamp = true
 )
 
+var (
+	// DefaultFlags are the default flags.
+	DefaultFlags = []Flag{Fatal, Error, Warning, Info, HTTPResponse}
+	// DefaultFlagSet is the default verbosity for a diagnostics agent inited from the environment.
+	DefaultFlagSet = NewFlagSet(DefaultFlags...)
+
+	// DefaultHiddenFlags are the default hidden flags.
+	DefaultHiddenFlags []Flag
+)
+
 const (
-	// DefaultWorkerQueueDepth is the default depth per listener to queue work.
+	// DefaultWriteQueueDepth  is the default depth per listener to queue work.
 	// It's currently set to 256k entries.
-	DefaultWorkerQueueDepth = 1 << 10
-)
+	DefaultWriteQueueDepth = 1 << 18
 
-// String constants
-const (
-	Space   = " "
-	Newline = "\n"
-)
-
-// Common json fields
-const (
-	FieldFlag      = "flag"
-	FieldTimestamp = "_timestamp"
-	FieldMessage   = "message"
-	FieldFields    = "fields"
-)
-
-// JSON Formatter defaults
-const (
-	DefaultJSONPretty = false
+	// DefaultListenerQueueDepth is the default depth per listener to queue work.
+	// It's currently set to 256k entries.
+	DefaultListenerQueueDepth = 1 << 10
 )

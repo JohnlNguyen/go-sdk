@@ -7,7 +7,7 @@ import (
 	mathrand "math/rand"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 const (
@@ -60,7 +60,7 @@ func Split(secret []byte, parts, threshold int) ([][]byte, error) {
 	for idx, val := range secret {
 		p, err := makePolynomial(val, uint8(threshold-1))
 		if err != nil {
-			return nil, ex.New("failed to generate polynomial", ex.OptInner(err))
+			return nil, exception.New("failed to generate polynomial").WithInner(err)
 		}
 
 		// Generate a `parts` number of (x,y) pairs

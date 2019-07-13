@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // ErrUnexpectedNewLine is returned from scan.go when you just hit enter with nothing in the prompt
-const ErrUnexpectedNewLine ex.Class = "unexpected newline"
+const ErrUnexpectedNewLine exception.Class = "unexpected newline"
 
 // Prompt gives a prompt and reads input until newlines.
 func Prompt(prompt string) string {

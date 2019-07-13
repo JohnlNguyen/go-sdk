@@ -6,42 +6,38 @@ import (
 )
 
 // NewInterlockedWriter returns a new interlocked writer.
-func NewInterlockedWriter(output io.Writer) *InterlockedWriter {
-	if typed, ok := output.(*InterlockedWriter); ok {
-		return typed
-	}
+func NewInterlockedWriter(output io.Writer) io.Writer {
 	return &InterlockedWriter{
-		Output: output,
+		output:   output,
+		syncRoot: sync.Mutex{},
 	}
 }
 
 // InterlockedWriter is a writer that serializes access to the Write() method.
 type InterlockedWriter struct {
-	sync.Mutex
-
-	Output io.Writer
+	output   io.Writer
+	syncRoot sync.Mutex
 }
 
 // Write writes the given bytes to the inner writer.
 func (iw *InterlockedWriter) Write(buffer []byte) (count int, err error) {
-	iw.Lock()
+	iw.syncRoot.Lock()
 
-	count, err = iw.Output.Write(buffer)
+	count, err = iw.output.Write(buffer)
 	if err != nil {
-		iw.Unlock()
+		iw.syncRoot.Unlock()
 		return
 	}
-
-	iw.Unlock()
+	iw.syncRoot.Unlock()
 	return
 }
 
 // Close closes any outputs that are io.WriteCloser's.
 func (iw *InterlockedWriter) Close() (err error) {
-	iw.Lock()
-	defer iw.Unlock()
+	iw.syncRoot.Lock()
+	defer iw.syncRoot.Unlock()
 
-	if typed, isTyped := iw.Output.(io.WriteCloser); isTyped {
+	if typed, isTyped := iw.output.(io.WriteCloser); isTyped {
 		err = typed.Close()
 		if err != nil {
 			return

@@ -5,5 +5,11 @@ type Defaults []Option
 
 // Add adds new options to the default set.
 func (d Defaults) Add(options ...Option) Defaults {
-	return append(d, options...)
+	d = append(d, options...)
+	return d
+}
+
+// ConcatWith concats the options with a given set of new options for output.
+func (d Defaults) ConcatWith(options ...Option) []Option {
+	return []Option(append(d, options...))
 }

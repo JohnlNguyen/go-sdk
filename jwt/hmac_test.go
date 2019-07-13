@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blend/go-sdk/jwt"
-	"github.com/blend/go-sdk/jwt/test"
+	"go-sdk/jwt"
+	"go-sdk/jwt/test"
 )
 
 var hmacTestData = []struct {

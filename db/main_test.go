@@ -11,8 +11,8 @@ import (
 	// tests uses postgres
 	_ "github.com/lib/pq"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/uuid"
+	"go-sdk/assert"
+	"go-sdk/uuid"
 )
 
 //------------------------------------------------------------------------------------------------
@@ -21,12 +21,13 @@ import (
 
 // TestMain is the testing entrypoint.
 func TestMain(m *testing.M) {
-	conn, err := New(OptConfigFromEnv())
+	cfg := MustNewConfigFromEnv()
+	conn, err := NewFromConfig(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%+v", err)
 		os.Exit(1)
 	}
-	err = openDefaultDB(conn)
+	err = OpenDefault(conn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%+v", err)
 		os.Exit(1)
@@ -36,8 +37,8 @@ func TestMain(m *testing.M) {
 
 // BenchmarkMain is the benchmarking entrypoint.
 func BenchmarkMain(b *testing.B) {
-	tx, err := defaultDB().Begin()
-	if err != nil {
+	tx, txErr := Default().Begin()
+	if txErr != nil {
 		b.Error("Unable to create transaction")
 		b.FailNow()
 	}
@@ -48,53 +49,36 @@ func BenchmarkMain(b *testing.B) {
 
 	defer func() {
 		if tx != nil {
-			if err := tx.Rollback(); err != nil {
-				b.Errorf("Error rolling back transaction: %v", err)
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				b.Errorf("Error rolling back transaction: %v", rollbackErr)
 				b.FailNow()
 			}
 		}
 	}()
 
-	err = seedObjects(10000, tx)
-	if err != nil {
-		b.Errorf("Error seeding objects: %v", err)
+	seedErr := seedObjects(10000, tx)
+	if seedErr != nil {
+		b.Errorf("Error seeding objects: %v", seedErr)
 		b.FailNow()
 	}
 
-	var manual time.Duration
-	for x := 0; x < b.N*10; x++ {
-		manualStart := time.Now()
-		_, err = readManual(tx)
-		if err != nil {
-			b.Errorf("Error using manual query: %v", err)
-			b.FailNow()
-		}
-		manual += time.Since(manualStart)
+	manualBefore := time.Now()
+	_, manualErr := readManual(tx)
+	manualAfter := time.Now()
+	if manualErr != nil {
+		b.Errorf("Error using manual query: %v", manualErr)
+		b.FailNow()
 	}
 
-	var orm time.Duration
-	for x := 0; x < b.N*10; x++ {
-		ormStart := time.Now()
-		_, err = readOrm(tx)
-		if err != nil {
-			b.Errorf("Error using orm: %v", err)
-			b.FailNow()
-		}
-		orm += time.Since(ormStart)
+	ormBefore := time.Now()
+	_, ormErr := readOrm(tx)
+	ormAfter := time.Now()
+	if ormErr != nil {
+		b.Errorf("Error using orm: %v", ormErr)
+		b.FailNow()
 	}
 
-	var ormCached time.Duration
-	for x := 0; x < b.N*10; x++ {
-		ormCachedStart := time.Now()
-		_, err = readCachedOrm(tx)
-		if err != nil {
-			b.Errorf("Error using orm: %v", err)
-			b.FailNow()
-		}
-		ormCached += time.Since(ormCachedStart)
-	}
-
-	b.Logf("Benchmark Test Results:\nManual: %v \nOrm: %v\nOrm (Cached Plan): %v\n", manual, orm, ormCached)
+	b.Logf("Benchmark Test Results: Manual: %v vs. Orm: %v\n", manualAfter.Sub(manualBefore), ormAfter.Sub(ormBefore))
 }
 
 //------------------------------------------------------------------------------------------------
@@ -113,8 +97,7 @@ func (uo upsertObj) TableName() string {
 
 func createUpserObjectTable(tx *sql.Tx) error {
 	createSQL := `CREATE TABLE IF NOT EXISTS upsert_object (uuid varchar(255) primary key, timestamp_utc timestamp, category varchar(255));`
-	_, err := defaultDB().Invoke(OptTx(tx)).Exec(createSQL)
-	return err
+	return Default().ExecInTx(createSQL, tx)
 }
 
 //------------------------------------------------------------------------------------------------
@@ -149,21 +132,17 @@ func createTable(tx *sql.Tx) error {
 		, pending boolean
 		, category varchar(255)
 	);`
-	i, err := defaultDB().Invoke(OptTx(tx)).Exec(createSQL)
-	fmt.Printf("Count: %d", i)
-	return err
+	return Default().ExecInTx(createSQL, tx)
 }
 
 func dropTableIfExists(tx *sql.Tx) error {
 	dropSQL := `DROP TABLE IF EXISTS bench_object;`
-	_, err := defaultDB().Invoke(OptTx(tx)).Exec(dropSQL)
-	return err
+	return Default().ExecInTx(dropSQL, tx)
 }
 
 func ensureUUIDExtension() error {
 	uuidCreate := `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`
-	_, err := defaultDB().Exec(uuidCreate)
-	return err
+	return Default().Exec(uuidCreate)
 }
 
 func createObject(index int, tx *sql.Tx) error {
@@ -175,7 +154,7 @@ func createObject(index int, tx *sql.Tx) error {
 		Pending:   index%2 == 0,
 		Category:  fmt.Sprintf("category_%d", index),
 	}
-	return defaultDB().Invoke(OptTx(tx)).Create(&obj)
+	return Default().CreateInTx(&obj, tx)
 }
 
 func seedObjects(count int, tx *sql.Tx) error {
@@ -201,7 +180,7 @@ func seedObjects(count int, tx *sql.Tx) error {
 func readManual(tx *sql.Tx) ([]benchObj, error) {
 	var objs []benchObj
 	readSQL := `select id,uuid,name,timestamp_utc,amount,pending,category from bench_object`
-	readStmt, err := defaultDB().PrepareContext(context.Background(), "", readSQL, tx)
+	readStmt, err := Default().PrepareContext(context.Background(), "", readSQL, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -227,33 +206,6 @@ func readManual(tx *sql.Tx) ([]benchObj, error) {
 
 func readOrm(tx *sql.Tx) ([]benchObj, error) {
 	var objs []benchObj
-	allErr := defaultDB().Invoke(OptTx(tx)).Query(fmt.Sprintf("select %s from bench_object", ColumnNamesCSV(benchObj{}))).OutMany(&objs)
+	allErr := Default().GetAllInTx(&objs, tx)
 	return objs, allErr
-}
-
-func readCachedOrm(tx *sql.Tx) ([]benchObj, error) {
-	var objs []benchObj
-	allErr := defaultDB().Invoke(OptTx(tx), OptCachedPlanKey("get_all_bench_object")).Query(fmt.Sprintf("select %s from bench_object", ColumnNamesCSV(benchObj{}))).OutMany(&objs)
-	return objs, allErr
-}
-
-var (
-	defaultConnection *Connection
-)
-
-func setDefaultDB(conn *Connection) {
-	defaultConnection = conn
-}
-
-func defaultDB() *Connection {
-	return defaultConnection
-}
-
-func openDefaultDB(conn *Connection) error {
-	err := conn.Open()
-	if err != nil {
-		return err
-	}
-	setDefaultDB(conn)
-	return nil
 }

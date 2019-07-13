@@ -3,7 +3,7 @@ package selector
 import (
 	"testing"
 
-	assert "github.com/blend/go-sdk/assert"
+	assert "go-sdk/assert"
 )
 
 func TestHasKey(t *testing.T) {

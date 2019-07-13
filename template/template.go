@@ -7,8 +7,8 @@ import (
 
 	texttemplate "text/template"
 
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/env"
+	"go-sdk/exception"
 )
 
 // New creates a new template.
@@ -27,7 +27,7 @@ func New() *Template {
 func NewFromFile(filepath string) (*Template, error) {
 	contents, err := ioutil.ReadFile(filepath)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 
 	return New().WithName(filepath).WithBody(string(contents)), nil
@@ -101,7 +101,7 @@ func (t *Template) WithVars(vars Vars) *Template {
 
 // WithEnvVars sets the environment variables.
 func (t *Template) WithEnvVars(envVars env.Vars) *Template {
-	t.Viewmodel.env = env.Merge(t.Viewmodel.env, envVars)
+	t.Viewmodel.env = env.MergeVars(t.Viewmodel.env, envVars)
 	return t
 }
 

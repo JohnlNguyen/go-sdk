@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/blend/go-sdk/stats/tracing"
+	"go-sdk/stats/tracing"
 )
 
 // TracedUnary returns a unary server interceptor.

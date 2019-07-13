@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/blend/go-sdk/r2"
-	"github.com/blend/go-sdk/stats/tracing"
+	"go-sdk/r2"
+	"go-sdk/stats/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -25,10 +25,6 @@ func (rt r2Tracer) Start(req *http.Request) r2.TraceFinisher {
 		opentracing.StartTime(time.Now().UTC()),
 	}
 	span, _ := tracing.StartSpanFromContext(req.Context(), rt.tracer, tracing.OperationHTTPRequest, startOptions...)
-
-	if req.Header == nil {
-		req.Header = make(http.Header)
-	}
 	rt.tracer.Inject(span.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(req.Header))
 	return r2TraceFinisher{span: span}
 }
@@ -38,7 +34,7 @@ type r2TraceFinisher struct {
 }
 
 func (rtf r2TraceFinisher) Finish(req *http.Request, res *http.Response, ts time.Time, err error) {
-	if rtf.span == nil {
+	if rtf.span != nil {
 		return
 	}
 	tracing.SpanError(rtf.span, err)

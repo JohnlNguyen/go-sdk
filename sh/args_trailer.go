@@ -3,12 +3,12 @@ package sh
 import (
 	"strings"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // Errors
 const (
-	ErrFlagsNoTrailer ex.Class = "sh; error parsing args trailer; missing '--' token, or nothing follows it"
+	ErrFlagsNoTrailer exception.Class = "sh; error parsing args trailer; missing '--' token, or nothing follows it"
 )
 
 // ArgsTrailer parses a set of os.Args, and returns everything after the `--` token.
@@ -22,10 +22,10 @@ func ArgsTrailer(args ...string) ([]string, error) {
 		}
 	}
 	if foundIndex == 0 {
-		return nil, ex.New(ErrFlagsNoTrailer, ex.OptMessagef("args: %v", strings.Join(args, " ")))
+		return nil, exception.New(ErrFlagsNoTrailer).WithMessagef("args: %v", strings.Join(args, " "))
 	}
 	if foundIndex == len(args)-1 {
-		return nil, ex.New(ErrFlagsNoTrailer, ex.OptMessage("cannot be the last flag argument"))
+		return nil, exception.New(ErrFlagsNoTrailer).WithMessagef("cannot be the last flag argument")
 	}
 	return args[foundIndex+1:], nil
 }

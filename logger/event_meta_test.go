@@ -4,39 +4,52 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/ansi"
-
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestNewEventMeta(t *testing.T) {
 	assert := assert.New(t)
 
 	em := NewEventMeta(Info)
-	assert.Equal(Info, em.GetFlag())
-	assert.False(em.GetTimestamp().IsZero())
+	assert.Equal(Info, em.Flag())
+	assert.False(em.Timestamp().IsZero())
 }
 
-func TestEventMetaOptions(t *testing.T) {
+func TestEventMetaProperties(t *testing.T) {
 	assert := assert.New(t)
 
 	em := NewEventMeta(Info)
-	assert.Equal(Info, em.GetFlag())
-	OptEventMetaFlag(Error)(em)
-	assert.Equal(Error, em.GetFlag())
 
-	assert.False(em.GetTimestamp().IsZero())
-	OptEventMetaTimestamp(time.Time{})(em)
-	assert.True(em.GetTimestamp().IsZero())
+	assert.NotNil(em.Annotations())
+	assert.NotNil(em.Labels())
 
-	assert.Empty(em.GetFlagColor())
-	OptEventMetaFlagColor(ansi.ColorBlue)(em)
-	assert.Equal(ansi.ColorBlue, em.GetFlagColor())
-}
+	assert.Empty(em.Headings())
+	em.SetHeadings("Headings")
+	assert.Equal([]string{"Headings"}, em.Headings())
 
-func TestEventMetaDecompose(t *testing.T) {
-	assert := assert.New(t)
+	assert.Equal(Info, em.Flag())
+	em.SetFlag(Fatal)
+	assert.Equal(Fatal, em.Flag())
 
-	decomposed := NewEventMeta(Info).Decompose()
-	assert.Equal("info", decomposed[FieldFlag])
+	assert.Empty(em.FlagTextColor())
+	em.SetFlagTextColor(ColorRed)
+	assert.Equal(ColorRed, em.FlagTextColor())
+
+	assert.False(em.Timestamp().IsZero())
+	em.SetTimestamp(time.Time{})
+	assert.True(em.Timestamp().IsZero())
+
+	assert.Empty(em.Labels())
+	em.AddLabelValue("foo", "bar")
+	assert.Equal("bar", em.Labels()["foo"])
+
+	em.SetLabels(nil)
+	assert.Empty(em.Labels())
+
+	assert.Empty(em.Annotations())
+	em.AddAnnotationValue("buzz", "fuzz")
+	assert.Equal("fuzz", em.Annotations()["buzz"])
+
+	em.SetAnnotations(nil)
+	assert.Empty(em.Annotations())
 }

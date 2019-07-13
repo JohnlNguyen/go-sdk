@@ -5,17 +5,17 @@ import (
 	"os"
 	"sync"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // NewTemp creates a new temp file with given contents.
 func NewTemp(contents []byte) (*Temp, error) {
 	f, err := ioutil.TempFile("", "")
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	if _, err := f.Write(contents); err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	return &Temp{
 		file: f,
@@ -53,7 +53,7 @@ func (tf *Temp) Read(buffer []byte) (int, error) {
 	defer tf.Unlock()
 
 	read, err := tf.file.Read(buffer)
-	return read, ex.New(err)
+	return read, exception.New(err)
 }
 
 // ReadAt reads len(b) bytes from the File starting at byte offset off.
@@ -65,7 +65,7 @@ func (tf *Temp) ReadAt(buffer []byte, off int64) (int, error) {
 	defer tf.Unlock()
 
 	read, err := tf.file.ReadAt(buffer, off)
-	return read, ex.New(err)
+	return read, exception.New(err)
 }
 
 // Write writes len(b) bytes to the File.
@@ -76,7 +76,7 @@ func (tf *Temp) Write(contents []byte) (int, error) {
 	defer tf.Unlock()
 
 	written, err := tf.file.Write(contents)
-	return written, ex.New(err)
+	return written, exception.New(err)
 }
 
 // WriteAt writes len(b) bytes to the File starting at byte offset off.
@@ -87,7 +87,7 @@ func (tf *Temp) WriteAt(contents []byte, off int64) (int, error) {
 	defer tf.Unlock()
 
 	written, err := tf.file.WriteAt(contents, off)
-	return written, ex.New(err)
+	return written, exception.New(err)
 }
 
 // WriteString is like Write, but writes the contents of string s rather than
@@ -97,7 +97,7 @@ func (tf *Temp) WriteString(contents string) (int, error) {
 	defer tf.Unlock()
 
 	written, err := tf.file.WriteString(contents)
-	return written, ex.New(err)
+	return written, exception.New(err)
 }
 
 // Close closes the file reference and deletes the file.
@@ -106,10 +106,10 @@ func (tf *Temp) Close() error {
 	defer tf.Unlock()
 
 	if err := tf.file.Close(); err != nil {
-		return ex.New(err)
+		return exception.New(err)
 	}
 	if err := os.Remove(tf.file.Name()); err != nil {
-		return ex.New(err)
+		return exception.New(err)
 	}
 	return nil
 }

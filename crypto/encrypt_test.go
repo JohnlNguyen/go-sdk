@@ -3,7 +3,7 @@ package crypto
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestEncryptDecrypt(t *testing.T) {

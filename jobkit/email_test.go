@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/email"
+	"go-sdk/assert"
+	"go-sdk/cron"
+	"go-sdk/email"
 )
 
 func TestNewEmailMessage(t *testing.T) {

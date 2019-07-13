@@ -10,7 +10,7 @@ Here is a simple example of getting started with chronometer; running a backgrou
 ```go
 package main
 
-import "github.com/blend/go-sdk/cron"
+import "go-sdk/cron"
 
 ...
 	mgr := cron.New()
@@ -26,7 +26,7 @@ import "github.com/blend/go-sdk/cron"
 	}))
 ```
 
-The above wraps a simple function signature with a task, and allows us to check if a cancellation signal has been sent. 
+The above wraps a simple function signature with a task, and allows us to check if a cancellation signal has been sent.
 For a more detailed (running) example, look in `_sample/main.go`.
 
 ### Schedules
@@ -37,7 +37,7 @@ You're free to implement your own schedules outside the basic ones; a schedule i
 
 ### Tasks vs. Jobs
 
-Jobs are tasks with schedules, thats about it. The interfaces are very similar otherwise. 
+Jobs are tasks with schedules, thats about it. The interfaces are very similar otherwise.
 
 ### Optional Interfaces
 

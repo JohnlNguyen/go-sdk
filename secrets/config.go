@@ -1,9 +1,11 @@
 package secrets
 
 import (
+	"net/url"
 	"time"
 
-	"github.com/blend/go-sdk/env"
+	"go-sdk/configutil"
+	"go-sdk/env"
 )
 
 // EnvVars
@@ -12,10 +14,22 @@ const (
 	EnvVarVaultToken = "VAULT_TOKEN"
 )
 
-// NewConfigFromEnv returns a config populated by the env.
-func NewConfigFromEnv() (cfg Config, err error) {
-	err = env.Env().ReadInto(&cfg)
+// MustNewConfigFromEnv returns a config set from the env, and panics on error.
+func MustNewConfigFromEnv() (cfg *Config) {
+	var err error
+	if cfg, err = NewConfigFromEnv(); err != nil {
+		panic(err)
+	}
 	return
+}
+
+// NewConfigFromEnv returns a config populated by the env.
+func NewConfigFromEnv() (*Config, error) {
+	var cfg Config
+	if err := env.Env().ReadInto(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
 
 // Config is the secrets config object.
@@ -39,31 +53,41 @@ func (c Config) IsZero() bool {
 	return len(c.Token) == 0
 }
 
-// Resolve reads the environment into the config on configutil.Read(...)
-func (c *Config) Resolve() error {
-	return env.Env().ReadInto(c)
+// GetAddr returns the client addr.
+func (c Config) GetAddr(inherited ...string) string {
+	return configutil.CoalesceString(c.Addr, DefaultAddr, inherited...)
 }
 
-// AddrOrDefault returns the client addr.
-func (c Config) AddrOrDefault() string {
-	if c.Addr != "" {
-		return c.Addr
+// MustAddr returns the addr as a url.
+func (c Config) MustAddr() *url.URL {
+	remote, err := url.ParseRequestURI(c.GetAddr())
+	if err != nil {
+		panic(err)
 	}
-	return DefaultAddr
+	return remote
 }
 
-// MountOrDefault returns secrets mount or a default.
-func (c Config) MountOrDefault() string {
-	if c.Mount != "" {
-		return c.Mount
-	}
-	return DefaultMount
+// GetToken returns the client token.
+func (c Config) GetToken() string {
+	return configutil.CoalesceString(c.Token, "")
 }
 
-// TimeoutOrDefault returns the client timeout.
-func (c Config) TimeoutOrDefault() time.Duration {
-	if c.Timeout > 0 {
-		return c.Timeout
-	}
-	return DefaultTimeout
+// GetMount returns the client token.
+func (c Config) GetMount() string {
+	return configutil.CoalesceString(c.Mount, DefaultMount)
+}
+
+// GetTimeout returns the client timeout.
+func (c Config) GetTimeout() time.Duration {
+	return configutil.CoalesceDuration(c.Timeout, DefaultTimeout)
+}
+
+// GetRootCAs returns root ca paths.
+func (c Config) GetRootCAs() []string {
+	return c.RootCAs
+}
+
+// GetServicePath returns the service path
+func (c Config) GetServicePath() string {
+	return c.ServicePath
 }

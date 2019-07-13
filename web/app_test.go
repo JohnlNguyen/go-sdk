@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/graceful"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/assert"
+	"go-sdk/env"
+	"go-sdk/graceful"
+	"go-sdk/logger"
+	"go-sdk/ref"
 )
 
 // assert an app is graceful
@@ -22,34 +24,61 @@ var (
 
 func controllerNoOp(_ *Ctx) Result { return nil }
 
-type testController struct {
-	callback func(app *App)
-}
-
-func (tc testController) Register(app *App) {
-	if tc.callback != nil {
-		tc.callback(app)
-	}
-}
-
 func TestAppNew(t *testing.T) {
 	assert := assert.New(t)
 
+	var route *Route
 	app := New()
-	assert.NotNil(app.State)
-	assert.NotNil(app.Views)
+	assert.NotEmpty(app.BindAddr())
+	assert.NotEmpty(app.Auth().CookieName())
+	assert.NotNil(app.state)
+	assert.NotNil(app.Views())
+	app.GET("/", func(c *Ctx) Result {
+		route = c.Route()
+		return c.Raw([]byte("ok!"))
+	})
+
+	assert.Nil(app.Mock().Get("/").Execute())
+	assert.NotNil(route)
+	assert.Equal("GET", route.Method)
+	assert.Equal("/", route.Path)
+	assert.NotNil(route.Handler)
+}
+
+func TestAppNewFromEnv(t *testing.T) {
+	assert := assert.New(t)
+
+	var route *Route
+	app := MustNewFromEnv()
+	assert.NotNil(app.state)
+	assert.NotNil(app.Views())
+	app.GET("/", func(c *Ctx) Result {
+		route = c.Route()
+		return c.Raw([]byte("ok!"))
+	})
+
+	assert.Nil(app.Mock().Get("/").Execute())
+	assert.NotNil(route)
+	assert.Equal("GET", route.Method)
+	assert.Equal("/", route.Path)
+	assert.NotNil(route.Handler)
 }
 
 func TestAppNewFromConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New(OptConfig(Config{
+	app := NewFromConfig(&Config{
 		BindAddr:               ":5555",
 		Port:                   5000,
-		HandleMethodNotAllowed: true,
-		HandleOptions:          true,
-		DisablePanicRecovery:   true,
-
+		HandleMethodNotAllowed: ref.Bool(true),
+		HandleOptions:          ref.Bool(true),
+		RecoverPanics:          ref.Bool(true),
+		HSTS: HSTSConfig{
+			Enabled:           ref.Bool(true),
+			MaxAgeSeconds:     9999,
+			IncludeSubDomains: ref.Bool(false),
+			Preload:           ref.Bool(false),
+		},
 		MaxHeaderBytes:    128,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       6 * time.Second,
@@ -57,37 +86,28 @@ func TestAppNewFromConfig(t *testing.T) {
 		WriteTimeout:      8 * time.Second,
 
 		CookieName: "A GOOD ONE",
+
 		Views: ViewCacheConfig{
-			LiveReload: true,
+			Cached: ref.Bool(true),
 		},
-	}))
+	})
 
-	assert.Equal(":5555", app.Config.BindAddr)
-	assert.True(app.Config.HandleMethodNotAllowed)
-	assert.True(app.Config.HandleOptions)
-	assert.True(app.Config.DisablePanicRecovery)
-	assert.Equal(128, app.Config.MaxHeaderBytes)
-	assert.Equal(5*time.Second, app.Config.ReadHeaderTimeout)
-	assert.Equal(6*time.Second, app.Config.ReadTimeout)
-	assert.Equal(7*time.Second, app.Config.IdleTimeout)
-	assert.Equal(8*time.Second, app.Config.WriteTimeout)
-	assert.Equal("A GOOD ONE", app.Auth.CookieName, "we should use the auth config for the auth manager")
-	assert.True(app.Views.LiveReload, "we should use the view cache config for the view cache")
-}
+	assert.Equal(":5555", app.BindAddr())
+	assert.True(app.HandleMethodNotAllowed())
+	assert.True(app.HandleOptions())
+	assert.True(app.RecoverPanics())
+	assert.Equal(128, app.MaxHeaderBytes())
+	assert.Equal(5*time.Second, app.ReadHeaderTimeout())
+	assert.Equal(6*time.Second, app.ReadTimeout())
+	assert.Equal(7*time.Second, app.IdleTimeout())
+	assert.Equal(8*time.Second, app.WriteTimeout())
+	assert.Equal("A GOOD ONE", app.Auth().CookieName(), "we should use the auth config for the auth manager")
+	assert.True(app.Views().Cached(), "we should use the view cache config for the view cache")
 
-func TestAppRegister(t *testing.T) {
-	assert := assert.New(t)
-	called := false
-	c := &testController{
-		callback: func(_ *App) {
-			called = true
-		},
-	}
-	app := New()
-
-	assert.False(called)
-	app.Register(c)
-	assert.True(called)
+	assert.True(app.HSTS().GetEnabled())
+	assert.Equal(9999, app.HSTS().GetMaxAgeSeconds())
+	assert.False(app.HSTS().GetIncludeSubDomains())
+	assert.False(app.HSTS().GetPreload())
 }
 
 func TestAppPathParams(t *testing.T) {
@@ -97,50 +117,36 @@ func TestAppPathParams(t *testing.T) {
 	var params RouteParameters
 	app := New()
 	app.GET("/:uuid", func(c *Ctx) Result {
-		route = c.Route
-		params = c.RouteParams
-		return Raw([]byte("ok!"))
+		route = c.Route()
+		params = c.routeParams
+		return c.Raw([]byte("ok!"))
 	})
 
-	route, params, skipSlashRedirect := app.Lookup("GET", "/foo")
-	assert.NotNil(route)
-	assert.NotEmpty(params)
-	assert.Equal("foo", params.Get("uuid"))
-	assert.False(skipSlashRedirect)
-
-	meta, err := MockGet(app, "/foo").DiscardWithResponse()
-	assert.Nil(err, fmt.Sprintf("%+v", err))
-	assert.Equal(http.StatusOK, meta.StatusCode)
+	assert.Nil(app.Mock().Get("/foo").Execute())
 	assert.NotNil(route)
 	assert.Equal("GET", route.Method)
 	assert.Equal("/:uuid", route.Path)
 	assert.NotNil(route.Handler)
 
+	assert.NotNil(params)
 	assert.NotEmpty(params)
 	assert.Equal("foo", params.Get("uuid"))
 }
 
 func TestAppPathParamsForked(t *testing.T) {
-	/*
-		this test should assert that we can have a common structure of routes
-		namely that you can have some shared prefix but differentiate by plural.
-	*/
-
 	assert := assert.New(t)
 
 	var route *Route
 	var params RouteParameters
 	app := New()
-	app.GET("/foo/:uuid", func(c *Ctx) Result { return NoContent })
 	app.GET("/foos/bar/:uuid", func(c *Ctx) Result {
-		route = c.Route
-		params = c.RouteParams
-		return Raw([]byte("ok!"))
+		route = c.Route()
+		params = c.routeParams
+		return c.Raw([]byte("ok!"))
 	})
+	app.GET("/foo/:uuid", func(c *Ctx) Result { return nil })
 
-	meta, err := MockGet(app, "/foos/bar/foo").DiscardWithResponse()
-	assert.Nil(err)
-	assert.Equal(http.StatusOK, meta.StatusCode)
+	assert.Nil(app.Mock().Get("/foos/bar/foo").Execute())
 	assert.NotNil(route)
 	assert.Equal("GET", route.Method)
 	assert.Equal("/foos/bar/:uuid", route.Path)
@@ -154,83 +160,97 @@ func TestAppPathParamsForked(t *testing.T) {
 func TestAppSetLogger(t *testing.T) {
 	assert := assert.New(t)
 
-	log := logger.MustNew()
-	app := New(OptLog(log))
-	assert.NotNil(app.Log)
+	log := logger.All()
+	defer log.Close()
+	app := New().WithLogger(log)
+	assert.NotNil(app.Logger())
+}
+
+func TestAppCtx(t *testing.T) {
+	assert := assert.New(t)
+
+	app := New()
+
+	rc, err := app.Mock().CreateCtx(nil)
+	assert.Nil(err)
+	assert.NotNil(rc)
+	assert.Nil(rc.log)
+
+	result := rc.Raw([]byte("foo"))
+	assert.NotNil(result)
+
+	err = result.Render(rc)
+	assert.Nil(err)
+	assert.NotZero(rc.Response().ContentLength())
 }
 
 func TestAppCreateStaticMountedRoute(t *testing.T) {
 	assert := assert.New(t)
 	app := New()
 
-	assert.Equal("/testPath/*filepath", app.formatStaticMountRoute("/testPath/*filepath"))
-	assert.Equal("/testPath/*filepath", app.formatStaticMountRoute("/testPath/"))
-	assert.Equal("/testPath/*filepath", app.formatStaticMountRoute("/testPath"))
+	assert.Equal("/testPath/*filepath", app.createStaticMountRoute("/testPath/*filepath"))
+	assert.Equal("/testPath/*filepath", app.createStaticMountRoute("/testPath/"))
+	assert.Equal("/testPath/*filepath", app.createStaticMountRoute("/testPath"))
 }
 
 func TestAppStaticRewrite(t *testing.T) {
 	assert := assert.New(t)
 	app := New()
 
-	app.ServeStatic("/testPath", []string{"_static"})
-	assert.NotEmpty(app.Statics)
-	assert.NotNil(app.Statics["/testPath/*filepath"])
+	app.ServeStatic("/testPath", "_static")
+	assert.NotEmpty(app.statics)
+	assert.NotNil(app.statics["/testPath/*filepath"])
 	assert.Nil(app.SetStaticRewriteRule("/testPath", "(.*)", func(path string, pieces ...string) string {
 		return path
 	}))
-	assert.NotNil(app.SetStaticRewriteRule("/notapath", "(.*)", func(path string, pieces ...string) string {
-		return path
-	}))
 
-	assert.NotEmpty(app.Statics["/testPath/*filepath"].RewriteRules)
+	assert.NotEmpty(app.statics["/testPath/*filepath"].RewriteRules())
 }
 
 func TestAppStaticRewriteBadExp(t *testing.T) {
 	assert := assert.New(t)
 	app := New()
-	app.ServeStatic("/testPath", []string{"_static"})
-	assert.NotEmpty(app.Statics)
-	assert.NotNil(app.Statics["/testPath/*filepath"])
+	app.ServeStatic("/testPath", "_static")
+	assert.NotEmpty(app.statics)
+	assert.NotNil(app.statics["/testPath/*filepath"])
 
 	err := app.SetStaticRewriteRule("/testPath", "((((", func(path string, pieces ...string) string {
 		return path
 	})
 
 	assert.NotNil(err)
-	assert.Empty(app.Statics["/testPath/*filepath"].RewriteRules)
+	assert.Empty(app.statics["/testPath/*filepath"].RewriteRules())
 }
 
 func TestAppStaticHeader(t *testing.T) {
 	assert := assert.New(t)
 	app := New()
-	app.ServeStatic("/testPath", []string{"_static"})
-	assert.NotEmpty(app.Statics)
-	assert.NotNil(app.Statics["/testPath/*filepath"])
+	app.ServeStatic("/testPath", "_static")
+	assert.NotEmpty(app.statics)
+	assert.NotNil(app.statics["/testPath/*filepath"])
 	assert.Nil(app.SetStaticHeader("/testPath/*filepath", "cache-control", "haha what is caching."))
-	assert.NotNil(app.SetStaticHeader("/notaroute", "cache-control", "haha what is caching."))
-	assert.NotEmpty(app.Statics["/testPath/*filepath"].Headers)
+	assert.NotEmpty(app.statics["/testPath/*filepath"].Headers())
 }
 
 func TestAppMiddleWarePipeline(t *testing.T) {
 	assert := assert.New(t)
+	app := New()
 
 	didRun := false
-
-	app := New()
 	app.GET("/",
-		func(r *Ctx) Result { return Raw([]byte("OK!")) },
+		func(r *Ctx) Result { return r.Raw([]byte("OK!")) },
 		func(action Action) Action {
 			didRun = true
 			return action
 		},
 		func(action Action) Action {
 			return func(r *Ctx) Result {
-				return Raw([]byte("foo"))
+				return r.Raw([]byte("foo"))
 			}
 		},
 	)
 
-	result, err := MockGet(app, "/").Bytes()
+	result, err := app.Mock().WithPathf("/").Bytes()
 	assert.Nil(err)
 	assert.True(didRun)
 	assert.Equal("foo", string(result))
@@ -238,11 +258,10 @@ func TestAppMiddleWarePipeline(t *testing.T) {
 
 func TestAppStatic(t *testing.T) {
 	assert := assert.New(t)
-
 	app := New()
-	app.ServeStatic("/static/*filepath", []string{"testdata"})
+	app.ServeStatic("/static/*filepath", "testdata")
 
-	index, err := MockGet(app, "/static/test_file.html").Bytes()
+	index, err := app.Mock().WithPathf("/static/test_file.html").Bytes()
 	assert.Nil(err)
 	assert.True(strings.Contains(string(index), "Test!"), string(index))
 }
@@ -251,10 +270,10 @@ func TestAppStaticSingleFile(t *testing.T) {
 	assert := assert.New(t)
 	app := New()
 	app.GET("/", func(r *Ctx) Result {
-		return Static("testdata/test_file.html")
+		return r.Static("testdata/test_file.html")
 	})
 
-	index, err := MockGet(app, "/").Bytes()
+	index, err := app.Mock().WithPathf("/").Bytes()
 	assert.Nil(err)
 	assert.True(strings.Contains(string(index), "Test!"), string(index))
 }
@@ -263,14 +282,14 @@ func TestAppProviderMiddleware(t *testing.T) {
 	assert := assert.New(t)
 
 	var okAction = func(r *Ctx) Result {
-		assert.NotNil(r.DefaultProvider)
-		return Raw([]byte("OK!"))
+		assert.NotNil(r.DefaultResultProvider())
+		return r.Raw([]byte("OK!"))
 	}
 
 	app := New()
 	app.GET("/", okAction, JSONProviderAsDefault)
 
-	err := MockGet(app, "/").Discard()
+	err := app.Mock().WithPathf("/").Execute()
 	assert.Nil(err)
 }
 
@@ -280,93 +299,92 @@ func TestAppProviderMiddlewareOrder(t *testing.T) {
 	app := New()
 
 	var okAction = func(r *Ctx) Result {
-		assert.NotNil(r.DefaultProvider)
-		return Raw([]byte("OK!"))
+		assert.NotNil(r.DefaultResultProvider())
+		return r.Raw([]byte("OK!"))
 	}
 
 	var dependsOnProvider = func(action Action) Action {
 		return func(r *Ctx) Result {
-			assert.NotNil(r.DefaultProvider)
+			assert.NotNil(r.DefaultResultProvider())
 			return action(r)
 		}
 	}
 
 	app.GET("/", okAction, dependsOnProvider, JSONProviderAsDefault)
-	assert.Nil(MockGet(app, "/").Discard())
+
+	err := app.Mock().WithPathf("/").Execute()
+	assert.Nil(err)
 }
 
 func TestAppDefaultResultProvider(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New(OptUse(ViewProviderAsDefault))
-	assert.NotEmpty(app.DefaultMiddleware)
+	app := New()
+	assert.Nil(app.DefaultMiddleware())
+
 	rc := app.createCtx(nil, nil, nil, nil)
-	assert.NotNil(rc.DefaultProvider)
-	assert.NotNil(rc.App)
+	assert.NotNil(rc.defaultResultProvider)
+	assert.NotNil(rc.app)
 }
 
 func TestAppDefaultResultProviderWithDefault(t *testing.T) {
 	assert := assert.New(t)
-
-	app := New(OptUse(ViewProviderAsDefault))
-	assert.NotEmpty(app.DefaultMiddleware)
+	app := New().WithDefaultMiddleware(ViewProviderAsDefault)
+	assert.NotNil(app.DefaultMiddleware())
 
 	rc := app.createCtx(nil, nil, nil, nil)
 
 	// this will be set to the default initially
-	assert.NotNil(rc.DefaultProvider)
+	assert.NotNil(rc.defaultResultProvider)
 
 	app.GET("/", func(ctx *Ctx) Result {
-		assert.NotNil(ctx.DefaultProvider)
-		_, isTyped := ctx.DefaultProvider.(*ViewCache)
+		assert.NotNil(ctx.DefaultResultProvider())
+		_, isTyped := ctx.DefaultResultProvider().(*ViewCache)
 		assert.True(isTyped)
 		return nil
 	})
-	assert.Nil(MockGet(app, "/").Discard())
 }
 
 func TestAppDefaultResultProviderWithDefaultFromRoute(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New(OptUse(JSONProviderAsDefault))
-	app.Views.AddLiterals(DefaultTemplateNotAuthorized)
+	app := New().WithDefaultMiddleware(JSONProviderAsDefault)
+	app.Views().AddLiterals(DefaultTemplateNotAuthorized)
 	app.GET("/", controllerNoOp, SessionRequired, ViewProviderAsDefault)
 
 	//somehow assert that the content type is html
-	meta, err := MockGet(app, "/").DiscardWithResponse()
+	meta, err := app.Mock().WithPathf("/").ExecuteWithMeta()
 	assert.Nil(err)
-	defer meta.Body.Close()
-
-	assert.Equal(ContentTypeHTML, meta.Header.Get(HeaderContentType))
+	assert.Equal(ContentTypeHTML, meta.Headers.Get(HeaderContentType))
 }
 
 func TestAppViewResult(t *testing.T) {
 	assert := assert.New(t)
 
 	app := New()
-	app.Views.AddPaths("testdata/test_file.html")
+	app.Views().AddPaths("testdata/test_file.html")
 	app.GET("/", func(r *Ctx) Result {
-		return r.Views.View("test", "foobarbaz")
+		return r.Views().View("test", "foobarbaz")
 	})
 
-	contents, meta, err := MockGet(app, "/").BytesWithResponse()
+	res, meta, err := app.Mock().WithPathf("/").BytesWithMeta()
 	assert.Nil(err)
-	assert.Equal(http.StatusOK, meta.StatusCode, string(contents))
-	assert.Equal(ContentTypeHTML, meta.Header.Get(HeaderContentType))
-	assert.Contains(string(contents), "foobarbaz")
+	assert.Equal(http.StatusOK, meta.StatusCode, string(res))
+	assert.Equal(ContentTypeHTML, meta.Headers.Get(HeaderContentType))
+	assert.Contains(string(res), "foobarbaz")
 }
 
 func TestAppWritesLogs(t *testing.T) {
 	assert := assert.New(t)
 
 	buffer := bytes.NewBuffer(nil)
-	agent := logger.MustNew(logger.OptAll(), logger.OptOutput(buffer))
+	agent := logger.New().WithFlags(logger.AllFlags()).WithWriter(logger.NewTextWriter(buffer))
 
-	app := New(OptLog(agent))
+	app := New().WithLogger(agent)
 	app.GET("/", func(r *Ctx) Result {
-		return Raw([]byte("ok!"))
+		return r.Raw([]byte("ok!"))
 	})
-	err := MockGet(app, "/").Discard()
+	err := app.Mock().Get("/").Execute()
 	assert.Nil(err)
 	assert.Nil(agent.Drain())
 
@@ -381,68 +399,123 @@ func TestAppBindAddr(t *testing.T) {
 	env.Env().Set(EnvironmentVariablePort, "1111")
 	defer env.Restore()
 
-	assert.Equal(":3333", New(OptBindAddr(":3333")).Config.BindAddr)
-	assert.Equal(":2222", New(OptPort(2222)).Config.BindAddr)
+	assert.Equal(":3333", New().WithBindAddr(":3333").BindAddr())
+	assert.Equal(":2222", New().WithPort(2222).BindAddr())
 }
 
 func TestAppNotFound(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New()
+	buffer := bytes.NewBuffer(nil)
+	agent := logger.New().WithFlags(logger.AllFlags()).WithWriter(logger.NewTextWriter(buffer).WithShowHeadings(true).WithUseColor(false).WithShowTimestamp(false))
+	app := New().WithLogger(agent)
 	app.GET("/", func(r *Ctx) Result {
-		return Raw([]byte("ok!"))
+		return r.Raw([]byte("ok!"))
 	})
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	app.NotFoundHandler = app.RenderAction(func(r *Ctx) Result {
+	app.WithNotFoundHandler(func(r *Ctx) Result {
 		defer wg.Done()
-		return JSON.NotFound()
+		return r.JSON().NotFound()
 	})
-	err := MockGet(app, "/doesntexist").Discard()
+
+	agent.Listen(logger.HTTPResponse, "foo", logger.NewHTTPResponseEventListener(func(wre *logger.HTTPResponseEvent) {
+		assert.NotNil(wre.Request())
+		assert.Empty(wre.Route())
+	}))
+
+	err := app.Mock().Get("/doesntexist").Execute()
 	assert.Nil(err)
+	assert.Nil(agent.Drain())
 	wg.Wait()
 }
 
 func TestAppDefaultHeaders(t *testing.T) {
 	assert := assert.New(t)
-	app := New(OptDefaultHeader("foo", "bar"), OptDefaultHeader("baz", "buzz"))
+	app := New().WithDefaultHeader("foo", "bar").WithDefaultHeader("baz", "buzz")
 	app.GET("/", func(r *Ctx) Result {
-		return Text.Result("ok")
+		return r.Text().Result("ok")
 	})
 
-	meta, err := MockGet(app, "/").DiscardWithResponse()
+	meta, err := app.Mock().Get("/").ExecuteWithMeta()
 	assert.Nil(err)
-	assert.NotEmpty(meta.Header)
-	assert.Equal("bar", meta.Header.Get("foo"))
-	assert.Equal("buzz", meta.Header.Get("baz"))
+	assert.NotEmpty(meta.Headers)
+	assert.Equal("bar", meta.Headers.Get("foo"))
+	assert.Equal("buzz", meta.Headers.Get("baz"))
+}
+
+func TestAppIssuesHSTSHeaders(t *testing.T) {
+	assert := assert.New(t)
+
+	app := New().WithHSTS(&HSTSConfig{
+		Enabled:           ref.Bool(true),
+		MaxAgeSeconds:     9999,
+		IncludeSubDomains: ref.Bool(true),
+		Preload:           ref.Bool(true),
+	})
+	app.GET("/", func(r *Ctx) Result {
+		return r.Text().Result("ok")
+	})
+
+	meta, err := app.Mock().Get("/").ExecuteWithMeta()
+	assert.Nil(err)
+	assert.NotEmpty(meta.Headers)
+	assert.NotEmpty(meta.Headers.Get(HeaderStrictTransportSecurity))
+	assert.Equal("max-age=9999; includeSubDomains; preload", meta.Headers.Get(HeaderStrictTransportSecurity))
+}
+
+func TestAppTLSOptions(t *testing.T) {
+	assert := assert.New(t)
+
+	app := New()
+	assert.NotNil(app.SetTLSClientCertPool([]byte{}))
+	app = New()
+	assert.Nil(app.SetTLSClientCertPool([]byte(TestTLSCert)))
+	assert.NotNil(app.TLSConfig())
+	assert.NotNil(app.TLSConfig().ClientCAs)
+	assert.NotNil(app.TLSConfig().GetConfigForClient)
+
+	app = New()
+	app.WithTLSClientCertVerification(tls.RequireAndVerifyClientCert)
+	assert.NotNil(app.TLSConfig())
+	assert.Equal(tls.RequireAndVerifyClientCert, app.TLSConfig().ClientAuth)
+
+	app = New()
+	app.WithTLSClientCertVerification(tls.RequireAndVerifyClientCert)
+	assert.NotNil(app.TLSConfig())
+	assert.Equal(tls.RequireAndVerifyClientCert, app.TLSConfig().ClientAuth)
 }
 
 func TestAppViewErrorsRenderErrorView(t *testing.T) {
 	assert := assert.New(t)
 
 	app := New()
-	app.Views.AddLiterals(`{{ define "malformed" }} {{ .Ctx ALSKADJALSKDJA }} {{ end }}`)
+	app.Views().AddLiterals(`{{ define "malformed" }} {{ .Ctx ALSKADJALSKDJA }} {{ end }}`)
 	app.GET("/", func(r *Ctx) Result {
-		return r.Views.View("malformed", nil)
+		return r.Views().View("malformed", nil)
 	})
-	assert.NotNil(MockGet(app, "/").Discard())
+
+	_, err := app.Mock().Get("/").Bytes()
+	assert.NotNil(err)
 }
 
 func TestAppAddsDefaultHeaders(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New(OptBindAddr(DefaultMockBindAddr))
+	app := NewFromConfig(&Config{})
+	app.WithBindAddr(DefaultIntegrationBindAddr)
+	assert.NotEmpty(app.DefaultHeaders())
 	app.GET("/", func(r *Ctx) Result {
-		return Text.Result("OK!")
+		return r.Text().Result("OK!")
 	})
 
 	go app.Start()
+	defer app.Shutdown()
 	<-app.NotifyStarted()
-	defer app.Stop()
 
-	res, err := http.Get("http://" + app.Listener.Addr().String() + "/")
+	res, err := http.Get("http://" + app.Listener().Addr().String() + "/")
 	assert.Nil(err)
 	assert.NotEmpty(res.Header)
 	assert.Equal(PackageName, res.Header.Get(HeaderServer))
@@ -451,7 +524,8 @@ func TestAppAddsDefaultHeaders(t *testing.T) {
 func TestAppHandlesPanics(t *testing.T) {
 	assert := assert.New(t)
 
-	app := New(OptBindAddr(DefaultMockBindAddr))
+	app := NewFromConfig(&Config{})
+	app.WithBindAddr(DefaultIntegrationBindAddr)
 	app.GET("/", func(r *Ctx) Result {
 		panic("this is only a test")
 	})
@@ -465,10 +539,10 @@ func TestAppHandlesPanics(t *testing.T) {
 		}()
 		app.Start()
 	}()
-	defer app.Stop()
-	<-app.NotifyStarted()
+	defer app.Shutdown()
+	<-app.Latch().NotifyStarted()
 
-	res, err := http.Get("http://" + app.Listener.Addr().String() + "/")
+	res, err := http.Get("http://" + app.Listener().Addr().String() + "/")
 	assert.Nil(err)
 	assert.Equal(http.StatusInternalServerError, res.StatusCode)
 	assert.False(didRecover)
@@ -513,13 +587,13 @@ type mockViewTraceFinisher struct {
 	parent *mockTracer
 }
 
-func (mvf mockViewTraceFinisher) FinishView(ctx *Ctx, vr *ViewResult, err error) {
+func (mvf mockViewTraceFinisher) Finish(ctx *Ctx, vr *ViewResult, err error) {
 	mvf.parent.OnViewFinish(ctx, vr, err)
 }
 
 func ok(_ *Ctx) Result            { return JSON.OK() }
 func internalError(_ *Ctx) Result { return JSON.InternalError(fmt.Errorf("only a test")) }
-func viewOK(ctx *Ctx) Result      { return ctx.Views.View("ok", nil) }
+func viewOK(ctx *Ctx) Result      { return ctx.Views().View("ok", nil) }
 
 func TestAppTracer(t *testing.T) {
 	assert := assert.New(t)
@@ -531,7 +605,7 @@ func TestAppTracer(t *testing.T) {
 
 	app := New()
 	app.GET("/", ok)
-	app.Tracer = mockTracer{
+	app.WithTracer(mockTracer{
 		OnStart: func(ctx *Ctx) {
 			defer wg.Done()
 			ctx.WithStateValue("foo", "bar")
@@ -540,9 +614,9 @@ func TestAppTracer(t *testing.T) {
 			defer wg.Done()
 			hasValue = ctx.StateValue("foo") != nil
 		},
-	}
+	})
 
-	assert.Nil(MockGet(app, "/").Discard())
+	assert.Nil(app.Mock().Get("/").Execute())
 	wg.Wait()
 
 	assert.True(hasValue)
@@ -559,15 +633,17 @@ func TestAppTracerError(t *testing.T) {
 	app := New()
 	app.GET("/", ok)
 	app.GET("/error", internalError)
-	app.Tracer = mockTracer{
+
+	app.WithTracer(mockTracer{
 		OnFinish: func(ctx *Ctx, err error) {
 			defer wg.Done()
 			hasError = err != nil
 		},
-	}
+	})
 
-	assert.Nil(MockGet(app, "/error").Discard())
+	assert.Nil(app.Mock().Get("/error").Execute())
 	wg.Wait()
+
 	assert.True(hasError)
 }
 
@@ -580,12 +656,12 @@ func TestAppViewTracer(t *testing.T) {
 	var hasValue bool
 
 	app := New()
-	app.Views.AddLiterals("{{ define \"ok\" }}ok{{end}}")
-	assert.Nil(app.Views.Initialize())
+	app.Views().AddLiterals("{{ define \"ok\" }}ok{{end}}")
+	assert.Nil(app.Views().Initialize())
 
 	app.GET("/", ok)
 	app.GET("/view", viewOK)
-	app.Tracer = mockTracer{
+	app.WithTracer(mockTracer{
 		OnStart:  func(_ *Ctx) { wg.Done() },
 		OnFinish: func(_ *Ctx, _ error) { wg.Done() },
 		OnViewStart: func(ctx *Ctx, vr *ViewResult) {
@@ -595,9 +671,9 @@ func TestAppViewTracer(t *testing.T) {
 		OnViewFinish: func(ctx *Ctx, vr *ViewResult, err error) {
 			defer wg.Done()
 		},
-	}
+	})
 
-	assert.Nil(MockGet(app, "/view").Discard())
+	assert.Nil(app.Mock().Get("/view").Execute())
 	wg.Wait()
 
 	assert.True(hasValue)
@@ -612,9 +688,10 @@ func TestAppViewTracerError(t *testing.T) {
 	var hasValue, hasError, hasViewError bool
 
 	app := New()
-	app.Views.AddLiterals("{{ define \"ok\" }}{{template \"fake\"}}ok{{end}}")
+	app.Views().AddLiterals("{{ define \"ok\" }}{{template \"fake\"}}ok{{end}}")
+	assert.Nil(app.Views().Initialize())
 	app.GET("/view", viewOK)
-	app.Tracer = mockTracer{
+	app.WithTracer(mockTracer{
 		OnStart: func(_ *Ctx) { wg.Done() },
 		OnFinish: func(_ *Ctx, err error) {
 			defer wg.Done()
@@ -628,64 +705,12 @@ func TestAppViewTracerError(t *testing.T) {
 			defer wg.Done()
 			hasViewError = err != nil
 		},
-	}
+	})
 
-	assert.Nil(MockGet(app, "/view").Discard())
+	assert.Nil(app.Mock().Get("/view").Execute())
 	wg.Wait()
 
 	assert.True(hasValue)
-	assert.True(hasError)
+	assert.False(hasError)
 	assert.True(hasViewError)
-}
-
-func TestAppAllowed(t *testing.T) {
-	assert := assert.New(t)
-	app := New()
-	app.GET("/test", nil)
-
-	allowed := strings.Split(app.allowed("*", ""), ", ")
-	assert.Len(allowed, 1)
-	assert.Equal("GET", allowed[0])
-
-	app.POST("/hello", nil)
-	allowed = strings.Split(app.allowed("*", ""), ", ")
-	assert.Len(allowed, 2)
-	assert.Any(allowed, func(i interface{}) bool {
-		s, ok := i.(string)
-		return ok && s == "GET"
-	})
-	assert.Any(allowed, func(i interface{}) bool {
-		s, ok := i.(string)
-		return ok && s == "POST"
-	})
-
-	app = New()
-	app.GET("/hello", controllerNoOp)
-	allowed = strings.Split(app.allowed("/hello", ""), ", ")
-	assert.Len(allowed, 2)
-	assert.Any(allowed, func(i interface{}) bool {
-		s, ok := i.(string)
-		return ok && s == "GET"
-	})
-	assert.Any(allowed, func(i interface{}) bool {
-		s, ok := i.(string)
-		return ok && s == "OPTIONS"
-	})
-	app.POST("/hello", controllerNoOp)
-	allowed = strings.Split(app.allowed("/hello", ""), ", ")
-	assert.Len(allowed, 3)
-
-	app.OPTIONS("/hello", controllerNoOp)
-	app.HEAD("/hello", controllerNoOp)
-	app.PUT("/hello", controllerNoOp)
-	app.DELETE("/hello", controllerNoOp)
-
-	app.PATCH("/hi", controllerNoOp)
-	app.PATCH("/there", controllerNoOp)
-	allowed = strings.Split(app.allowed("/hello", ""), ", ")
-	assert.Len(allowed, 6)
-
-	app.PATCH("/hello", controllerNoOp)
-	allowed = strings.Split(app.allowed("/hello", ""), ", ")
-	assert.Len(allowed, 7)
 }

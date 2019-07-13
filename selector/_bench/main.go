@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	selector "github.com/blend/go-sdk/selector"
+	selector "go-sdk/selector"
 	k8s "k8s.io/apimachinery/pkg/labels"
 )
 

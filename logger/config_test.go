@@ -1,48 +1,189 @@
 package logger
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/env"
+	"go-sdk/assert"
+	"go-sdk/env"
+	"go-sdk/yaml"
 )
 
-func TestConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	var cfg Config
-	assert.Equal(DefaultFlags, cfg.FlagsOrDefault())
-	assert.Equal(FormatText, cfg.FormatOrDefault())
-	_, ok := cfg.Formatter().(*TextOutputFormatter)
-	assert.True(ok)
-
-	cfg = Config{
-		Flags:  []string{Info, Error},
-		Format: FormatJSON,
-	}
-
-	assert.Equal([]string{Info, Error}, cfg.FlagsOrDefault())
-	assert.Equal(FormatJSON, cfg.FormatOrDefault())
+func b(v bool) *bool {
+	return &v
 }
 
-func TestConfigResolve(t *testing.T) {
+func TestConfigProperties(t *testing.T) {
 	assert := assert.New(t)
 
+	assert.Empty(Config{}.GetHeading())
+	assert.Equal("test", Config{Heading: "test"}.GetHeading())
+
+	assert.Equal(OutputFormatText, Config{}.GetOutputFormat())
+	assert.Equal(OutputFormatJSON, Config{OutputFormat: string(OutputFormatJSON)}.GetOutputFormat())
+
+	assert.Equal(AsStrings(DefaultFlags...), Config{}.GetFlags())
+	assert.Equal([]string{"foo", "bar"}, Config{Flags: []string{"foo", "bar"}}.GetFlags())
+
+	assert.Equal(DefaultRecoverPanics, Config{}.GetRecoverPanics())
+	assert.Equal(!DefaultRecoverPanics, Config{}.GetRecoverPanics(!DefaultRecoverPanics))
+	assert.Equal(!DefaultRecoverPanics, Config{RecoverPanics: b(!DefaultRecoverPanics)}.GetRecoverPanics())
+
+	assert.Equal(DefaultWriteQueueDepth, Config{}.GetWriteQueueDepth())
+	assert.Equal(DefaultWriteQueueDepth>>1, Config{}.GetWriteQueueDepth(DefaultWriteQueueDepth>>1))
+	assert.Equal(DefaultWriteQueueDepth>>2, Config{WriteQueueDepth: DefaultWriteQueueDepth >> 2}.GetWriteQueueDepth(DefaultWriteQueueDepth>>1))
+}
+
+func TestNewConfigFlags(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := &Config{Flags: []string{"all", "-debug"}}
+	log := NewFromConfig(cfg)
+	defer log.Close()
+
+	assert.True(log.IsEnabled(Silly))
+	assert.True(log.IsEnabled(Info))
+	assert.False(log.IsEnabled(Debug))
+	assert.True(log.IsEnabled(Warning))
+	assert.True(log.IsEnabled(Error))
+	assert.True(log.IsEnabled(Fatal))
+	assert.True(log.IsEnabled(Audit))
+	assert.True(log.IsEnabled(HTTPRequest))
+}
+
+func TestConfigYAML(t *testing.T) {
+	assert := assert.New(t)
+
+	corpus := `
+heading: test-heading
+outputFormat: test-format
+flags: [ "foo", "bar" ]
+hiddenFlags: [ "buzz", "wuzz" ]
+recoverPanics: false
+writeQueueDepth: 256
+listenerQueueDepth: 128
+`
+
+	var cfg Config
+	assert.Nil(yaml.Unmarshal([]byte(corpus), &cfg))
+	assert.Equal("test-heading", cfg.GetHeading())
+	assert.Equal("test-format", cfg.GetOutputFormat())
+	assert.Equal([]string{"foo", "bar"}, cfg.GetFlags())
+	assert.Equal([]string{"buzz", "wuzz"}, cfg.GetHiddenFlags())
+	assert.False(cfg.GetRecoverPanics())
+	assert.Equal(256, cfg.GetWriteQueueDepth())
+	assert.Equal(128, cfg.GetListenerQueueDepth())
+}
+
+func TestConfigJSON(t *testing.T) {
+	assert := assert.New(t)
+
+	corpus := `{
+"heading": "test-heading",
+"outputFormat": "test-format",
+"flags": [ "foo", "bar" ],
+"hiddenFlags": [ "buzz", "wuzz" ],
+"recoverPanics": false,
+"writeQueueDepth": 256,
+"listenerQueueDepth": 128
+}
+`
+
+	var cfg Config
+	assert.Nil(json.Unmarshal([]byte(corpus), &cfg))
+	assert.Equal("test-heading", cfg.GetHeading())
+	assert.Equal("test-format", cfg.GetOutputFormat())
+	assert.Equal([]string{"foo", "bar"}, cfg.GetFlags())
+	assert.Equal([]string{"buzz", "wuzz"}, cfg.GetHiddenFlags())
+	assert.False(cfg.GetRecoverPanics())
+	assert.Equal(256, cfg.GetWriteQueueDepth())
+	assert.Equal(128, cfg.GetListenerQueueDepth())
+}
+
+func TestNewConfigFromEnv(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg, err := NewConfigFromEnv()
+	assert.Nil(err)
+
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "http.response"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "info"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "warning"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "error"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "fatal"
+	})
+	assert.None(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "debug"
+	})
+}
+
+func TestNewConfigFromEnvWithVars(t *testing.T) {
+	assert := assert.New(t)
+
+	env.SetEnv(env.Vars{
+		"LOG_EVENTS": "info,debug,error,test",
+		"LOG_HIDDEN": "debug",
+	})
 	defer env.Restore()
-	env.Env().Set("LOG_FLAGS", "foo,bar")
-	env.Env().Set("LOG_HIDE_TIMESTAMP", "true")
-	env.Env().Set("LOG_HIDE_FIELDS", "true")
-	env.Env().Set("LOG_TIME_FORMAT", time.Kitchen)
-	env.Env().Set("NO_COLOR", "true")
 
-	cfg := &Config{}
-	assert.Nil(cfg.Resolve())
+	cfg, err := NewConfigFromEnv()
+	assert.Nil(err)
 
-	assert.Any(cfg.Flags, func(v interface{}) bool { return v.(string) == "foo" })
-	assert.Any(cfg.Flags, func(v interface{}) bool { return v.(string) == "bar" })
-	assert.True(cfg.Text.HideTimestamp)
-	assert.True(cfg.Text.HideFields)
-	assert.True(cfg.Text.NoColor)
-	assert.Equal(time.Kitchen, cfg.Text.TimeFormat)
+	assert.NotEmpty(cfg.GetFlags())
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "info"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "debug"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "error"
+	})
+	assert.Any(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "test"
+	})
+	assert.None(cfg.GetFlags(), func(v interface{}) bool {
+		return v.(string) == "fatal"
+	})
+
+}
+
+func TestGetWritersWithOutputFormat(t *testing.T) {
+	assert := assert.New(t)
+
+	config := &Config{OutputFormat: string(OutputFormatJSON)}
+	writers := config.GetWriters()
+	assert.Len(writers, 1)
+	assert.Equal(OutputFormatJSON, writers[0].OutputFormat())
+	config.OutputFormat = string(OutputFormatText)
+	writers = config.GetWriters()
+	assert.Len(writers, 1)
+	assert.Equal(OutputFormatText, writers[0].OutputFormat())
+	config.OutputFormat = "nope"
+	writers = config.GetWriters()
+	assert.Len(writers, 1)
+	assert.Equal(OutputFormatText, writers[0].OutputFormat())
+	config.OutputFormat = strings.ToUpper(string(OutputFormatJSON))
+	writers = config.GetWriters()
+	assert.Len(writers, 1)
+	assert.Equal(OutputFormatJSON, writers[0].OutputFormat())
+}
+
+func TestNewJSONWriterConfigFromEnv(t *testing.T) {
+	assert := assert.New(t)
+	defer env.Restore()
+
+	env.Env().Set("LOG_JSON_PRETTY", "false")
+	cfg := NewJSONWriterConfigFromEnv()
+	assert.False(cfg.GetPretty())
 }

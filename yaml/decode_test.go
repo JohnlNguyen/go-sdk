@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/yaml"
+	"go-sdk/assert"
+	"go-sdk/yaml"
 )
 
 var unmarshalIntTest = 123
@@ -1126,7 +1126,7 @@ longTag:
   label: center/big
 
 inlineMap:
-  # Inlined map 
+  # Inlined map
   << : {"x": 1, "y": 2, "r": 10}
   label: center/big
 

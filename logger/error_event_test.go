@@ -2,48 +2,96 @@ package logger
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
-	"github.com/blend/go-sdk/ansi"
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
+	"go-sdk/exception"
 )
-
-func TestNewErrorEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	/// stuff
-	ee := NewErrorEvent(Fatal, fmt.Errorf("not a test"), OptErrorEventErr(fmt.Errorf("only a test")), OptErrorEventState("foo"), OptErrorEventMetaOptions(OptEventMetaFlagColor(ansi.ColorBlue)))
-	assert.Equal(Fatal, ee.GetFlag())
-	assert.Equal("only a test", ee.Err.Error())
-	assert.Equal("foo", ee.State)
-	assert.Equal(ansi.ColorBlue, ee.GetFlagColor())
-
-	buf := new(bytes.Buffer)
-	tf := TextOutputFormatter{
-		NoColor: true,
-	}
-
-	ee.WriteText(tf, buf)
-	assert.Equal("only a test", buf.String())
-
-	contents, err := json.Marshal(ee)
-	assert.Nil(err)
-	assert.Contains(string(contents), "only a test")
-}
 
 func TestErrorEventListener(t *testing.T) {
 	assert := assert.New(t)
 
-	ee := NewErrorEvent(Fatal, fmt.Errorf("only a test"))
+	wg := sync.WaitGroup{}
+	wg.Add(4)
 
-	var didCall bool
-	ml := NewErrorEventListener(func(ctx context.Context, e *ErrorEvent) {
-		didCall = true
-	})
+	textBuffer := bytes.NewBuffer(nil)
+	jsonBuffer := bytes.NewBuffer(nil)
+	all := New().WithFlags(AllFlags()).WithRecoverPanics(false).
+		WithWriter(NewTextWriter(textBuffer)).
+		WithWriter(NewJSONWriter(jsonBuffer))
+	defer all.Close()
 
-	ml(context.Background(), ee)
-	assert.True(didCall)
+	all.Listen(Fatal, "default", NewErrorEventListener(func(e *ErrorEvent) {
+		defer wg.Done()
+
+		assert.Equal(Fatal, e.Flag())
+		assert.Equal("foo bar", e.Err().Error())
+	}))
+
+	go func() { defer wg.Done(); all.Trigger(NewErrorEvent(Fatal, fmt.Errorf("foo bar"))) }()
+	go func() { defer wg.Done(); all.Trigger(NewErrorEvent(Fatal, fmt.Errorf("foo bar"))) }()
+	wg.Wait()
+	all.Drain()
+
+	assert.NotEmpty(textBuffer.String())
+	assert.NotEmpty(jsonBuffer.String())
+}
+
+func TestErrorEventInterfaces(t *testing.T) {
+	assert := assert.New(t)
+
+	ee := NewErrorEvent(Fatal,
+		exception.New("this is a test").
+			WithMessagef("this is a message").
+			WithStack(exception.StackStrings([]string{"foo", "bar"}))).
+		WithHeadings("heading").
+		WithLabel("foo", "bar")
+
+	eventProvider, isEvent := MarshalEvent(ee)
+	assert.True(isEvent)
+	assert.Equal(Fatal, eventProvider.Flag())
+	assert.False(eventProvider.Timestamp().IsZero())
+
+	headingProvider, isHeadingProvider := MarshalEventHeadings(ee)
+	assert.True(isHeadingProvider)
+	assert.Equal([]string{"heading"}, headingProvider.Headings())
+
+	metaProvider, isMetaProvider := MarshalEventMetaProvider(ee)
+	assert.True(isMetaProvider)
+	assert.Equal("bar", metaProvider.Labels()["foo"])
+}
+
+func TestErrorEventProperties(t *testing.T) {
+	assert := assert.New(t)
+
+	se := NewErrorEventWithState(Fatal, nil, "foo")
+	assert.Equal("foo", se.State())
+
+	ee := NewErrorEvent(Fatal, nil)
+	assert.False(ee.Timestamp().IsZero())
+	assert.True(ee.WithTimestamp(time.Time{}).Timestamp().IsZero())
+
+	assert.Empty(ee.Labels())
+	assert.Equal("bar", ee.WithLabel("foo", "bar").Labels()["foo"])
+
+	assert.Empty(ee.Annotations())
+	assert.Equal("zar", ee.WithAnnotation("moo", "zar").Annotations()["moo"])
+
+	assert.Equal(Fatal, ee.Flag())
+	assert.Equal(Error, ee.WithFlag(Error).Flag())
+
+	assert.Empty(ee.Headings())
+	assert.Equal([]string{"Heading"}, ee.WithHeadings("Heading").Headings())
+
+	assert.Nil(ee.Err())
+	assert.Equal(fmt.Errorf("foo"), ee.WithErr(fmt.Errorf("foo")).Err())
+
+	assert.Nil(ee.State())
+	assert.Equal("State", ee.WithState("State").State())
+
+	assert.Empty(ee.FlagTextColor())
+	assert.Equal(ColorWhite, ee.WithFlagTextColor(ColorWhite).FlagTextColor())
 }

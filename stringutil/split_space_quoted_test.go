@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestSplitSpaceQuoted(t *testing.T) {
@@ -74,9 +74,4 @@ func TestSplitSpaceQuoted(t *testing.T) {
 	assert.Equal(`1st floor bathrooms`, values[1])
 	assert.Equal(`xyz street side exit`, values[2])
 	assert.Equal(`other (please explain)`, values[3])
-
-	values = SplitSpaceQuoted(`‘how about now’ ‘or now’`)
-	assert.Len(values, 2)
-	assert.Equal(`how about now`, values[0])
-	assert.Equal(`or now`, values[1])
 }

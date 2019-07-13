@@ -3,15 +3,14 @@ package grpcutil
 import (
 	"net"
 
-	"github.com/blend/go-sdk/async"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/async"
+	"go-sdk/logger"
 	"google.golang.org/grpc"
 )
 
 // NewGraceful returns a new graceful host for a grpc server.
 func NewGraceful(listener net.Listener, server *grpc.Server) *Graceful {
 	return &Graceful{
-		Latch:    async.NewLatch(),
 		Listener: listener,
 		Server:   server,
 	}
@@ -19,14 +18,14 @@ func NewGraceful(listener net.Listener, server *grpc.Server) *Graceful {
 
 // Graceful is a shim for graceful hosting grpc servers.
 type Graceful struct {
-	*async.Latch
-	Log      logger.Log
+	Log      logger.FullReceiver
+	Latch    async.Latch
 	Listener net.Listener
 	Server   *grpc.Server
 }
 
 // WithLogger sets the logger.
-func (gz *Graceful) WithLogger(log logger.Log) *Graceful {
+func (gz *Graceful) WithLogger(log logger.FullReceiver) *Graceful {
 	gz.Log = log
 	return gz
 }
@@ -35,14 +34,14 @@ func (gz *Graceful) WithLogger(log logger.Log) *Graceful {
 func (gz *Graceful) Start() error {
 	gz.Latch.Starting()
 	gz.Latch.Started()
-	logger.MaybeInfof(gz.Log, "grpc server starting, listening on %v %s", gz.Listener.Addr().Network(), gz.Listener.Addr().String())
+	logger.MaybeSyncInfof(gz.Log, "grpc server starting, listening on %v %s", gz.Listener.Addr().Network(), gz.Listener.Addr().String())
 	return gz.Server.Serve(gz.Listener)
 }
 
 // Stop shuts the server down.
 func (gz *Graceful) Stop() error {
 	gz.Latch.Stopping()
-	logger.MaybeInfof(gz.Log, "grpc server shutting down")
+	logger.MaybeSyncInfof(gz.Log, "grpc server shutting down")
 	gz.Server.GracefulStop()
 	gz.Latch.Stopped()
 	return nil
@@ -50,15 +49,15 @@ func (gz *Graceful) Stop() error {
 
 // IsRunning returns if the server is running.
 func (gz *Graceful) IsRunning() bool {
-	return gz.IsRunning()
+	return gz.Latch.IsRunning()
 }
 
 // NotifyStarted returns the notify started signal.
 func (gz *Graceful) NotifyStarted() <-chan struct{} {
-	return gz.NotifyStarted()
+	return gz.Latch.NotifyStarted()
 }
 
 // NotifyStopped returns the notify stopped signal.
 func (gz *Graceful) NotifyStopped() <-chan struct{} {
-	return gz.NotifyStopped()
+	return gz.Latch.NotifyStopped()
 }

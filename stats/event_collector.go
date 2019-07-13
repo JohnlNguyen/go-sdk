@@ -3,7 +3,7 @@ package stats
 import (
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // EventCollector is a collector for events.
@@ -58,10 +58,10 @@ type Event struct {
 // Check verifies that an event is valid.
 func (e Event) Check() error {
 	if len(e.Title) == 0 {
-		return ex.Class("event title is required")
+		return exception.Class("event title is required")
 	}
 	if len(e.Text) == 0 {
-		return ex.Class("event text is required")
+		return exception.Class("event text is required")
 	}
 	return nil
 }

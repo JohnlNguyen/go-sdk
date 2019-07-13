@@ -1,13 +1,13 @@
 r2
 ==
 
-R2 is an expressive and minimal library wrapping http clients that handles some common options (like timeouts, transports etc.) in a more unified fashion.
+This is meant to be an experiment for an options based api for sending request. It is not stable and should only be used on an experimental basis.
 
 ## Philosophy
 
-Departing from "Fluent APIs", `go-sdk/r2` uses an "Options" based api for configuring and making http client requests.
+Departing from "Fluent APIs", `go-sdk/r2` investigates what an "Options" based api for making http requests would look like.
 
-Funadmentally, it means taking code that looked like:
+Funadmentally, it means taking code that looks like:
 
 ```golang
 res, err := request.New().
@@ -31,6 +31,10 @@ res, err := r2.New("https://www.google.com/robots.txt",
 
 The key difference here is making use of a variadic list of "Options" which are really just functions that satisfy the signature `func(*r2.Request) error`. This lets developers _extend_ the possible options that can be specified, vs. having a strictly hard coded list hung off the `request.Request` object, which require a PR to make changes to.
 
+## Usage
+
+R2 uses a different paradigm from `go-sdk/request`; instead of chaining calls with a "fluent" api, options can be provided in a variadic list. This lets users extend the possible options as necessary.
+
 ## Example
 
 ```golang
@@ -41,7 +45,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/blend/go-sdk/r2"
+	"go-sdk/r2"
 )
 
 func CustomOption() r2.Option {

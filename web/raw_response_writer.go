@@ -4,10 +4,6 @@ import (
 	"net/http"
 )
 
-var (
-	_ ResponseWriter = (*RawResponseWriter)(nil)
-)
-
 // NewRawResponseWriter creates a new uncompressed response writer.
 func NewRawResponseWriter(w http.ResponseWriter) *RawResponseWriter {
 	return &RawResponseWriter{
@@ -53,13 +49,6 @@ func (rw *RawResponseWriter) StatusCode() int {
 // ContentLength returns the content length
 func (rw *RawResponseWriter) ContentLength() int {
 	return rw.contentLength
-}
-
-// Flush implements http.Flusher.
-func (rw *RawResponseWriter) Flush() {
-	if typed, ok := rw.innerResponse.(http.Flusher); ok {
-		typed.Flush()
-	}
 }
 
 // Close disposes of the response writer.

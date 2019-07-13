@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // --------------------------------------------------------------------------------
@@ -61,27 +61,17 @@ type Column struct {
 	Inline       bool
 }
 
-// SetZero sets the empty value on a field on a database mapped object
-func (c Column) SetZero(object interface{}) {
-	objValue := ReflectValue(object)
-	field := objValue.FieldByName(c.FieldName)
-	field.Set(reflect.Zero(field.Type()))
-}
-
 // SetValue sets the field on a database mapped object to the instance of `value`.
-func (c Column) SetValue(object interface{}, value interface{}, clearEmpty bool) error {
-	objValue := ReflectValue(object)
+func (c Column) SetValue(object interface{}, value interface{}) error {
+	objValue := reflectValue(object)
 	field := objValue.FieldByName(c.FieldName)
 	fieldType := field.Type()
 	if !field.CanSet() {
-		return ex.New("hit a field we can't set: '" + c.FieldName + "', did you forget to pass the object as a reference?")
+		return exception.New("hit a field we can't set: '" + c.FieldName + "', did you forget to pass the object as a reference?")
 	}
 
-	valueReflected := ReflectValue(value)
+	valueReflected := reflectValue(value)
 	if !valueReflected.IsValid() {
-		if clearEmpty {
-			field.Set(reflect.Zero(field.Type()))
-		}
 		return nil
 	}
 
@@ -91,7 +81,7 @@ func (c Column) SetValue(object interface{}, value interface{}, clearEmpty bool)
 			fieldAddr := field.Addr().Interface()
 			jsonErr := json.Unmarshal([]byte(valueContents.String), fieldAddr)
 			if jsonErr != nil {
-				return ex.New(jsonErr)
+				return exception.New(jsonErr)
 			}
 			field.Set(reflect.ValueOf(fieldAddr).Elem())
 		}
@@ -120,7 +110,7 @@ func (c Column) SetValue(object interface{}, value interface{}, clearEmpty bool)
 			return nil
 		}
 
-		return ex.New("cannot take address of value")
+		return exception.New("cannot take address of value")
 	}
 
 	convertedValue := valueReflected.Convert(fieldType)
@@ -130,7 +120,7 @@ func (c Column) SetValue(object interface{}, value interface{}, clearEmpty bool)
 
 // GetValue returns the value for a column on a given database mapped object.
 func (c Column) GetValue(object DatabaseMapped) interface{} {
-	value := ReflectValue(object)
+	value := reflectValue(object)
 	if c.Parent != nil {
 		embedded := value.Field(c.Parent.Index)
 		valueField := embedded.Field(c.Index)

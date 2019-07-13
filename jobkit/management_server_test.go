@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/uuid"
-	"github.com/blend/go-sdk/web"
+	"go-sdk/assert"
+	"go-sdk/cron"
+	"go-sdk/uuid"
+	"go-sdk/web"
 )
 
 func TestManagementServer(t *testing.T) {
@@ -18,23 +18,21 @@ func TestManagementServer(t *testing.T) {
 
 	jm := cron.New()
 
-	jm.LoadJobs(
-		cron.NewJob("test0", func(_ context.Context) error { return nil }),
-		cron.NewJob("test1", func(_ context.Context) error { return nil }),
-	)
+	jm.LoadJob(cron.NewJob("test0", func(_ context.Context) error { return nil }))
+	jm.LoadJob(cron.NewJob("test1", func(_ context.Context) error { return nil }))
 
-	app := NewManagementServer(jm, Config{
+	app := NewManagementServer(jm, &Config{
 		Web: web.Config{
 			Port: 5000,
 		},
 	})
 
-	meta, err := web.MockGet(app, "/").DiscardWithResponse()
+	meta, err := app.Mock().Get("/").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 
 	var jobs cron.Status
-	meta, err = web.MockGet(app, "/api/jobs").JSONWithResponse(&jobs)
+	meta, err = app.Mock().Get("/api/jobs").JSONWithMeta(&jobs)
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.Len(jobs.Jobs, 2)
@@ -44,24 +42,23 @@ func TestManagementServerHealthz(t *testing.T) {
 	assert := assert.New(t)
 
 	jm := cron.New()
-	jm.LoadJobs(
-		cron.NewJob("test0", func(_ context.Context) error { return nil }),
-		cron.NewJob("test1", func(_ context.Context) error { return nil }),
-	)
+	jm.LoadJob(cron.NewJob("test0", func(_ context.Context) error { return nil }))
+	jm.LoadJob(cron.NewJob("test1", func(_ context.Context) error { return nil }))
 	jm.StartAsync()
-	app := NewManagementServer(jm, Config{
+
+	app := NewManagementServer(jm, &Config{
 		Web: web.Config{
 			Port: 5000,
 		},
 	})
 
-	meta, err := web.MockGet(app, "/healthz").DiscardWithResponse()
+	meta, err := app.Mock().Get("/healthz").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 
 	jm.Stop()
 
-	meta, err = web.MockGet(app, "/healthz").DiscardWithResponse()
+	meta, err = app.Mock().Get("/healthz").ExecuteWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusInternalServerError, meta.StatusCode)
 }
@@ -75,7 +72,7 @@ func TestManagementServerIndex(t *testing.T) {
 	errorOutput := uuid.V4().String()
 
 	jm := cron.New()
-	jm.LoadJobs(cron.NewJob(jobName, func(_ context.Context) error { return nil }))
+	jm.LoadJob(cron.NewJob(jobName, func(_ context.Context) error { return nil }))
 
 	js, err := jm.Job(jobName)
 	assert.Nil(err)
@@ -90,19 +87,19 @@ func TestManagementServerIndex(t *testing.T) {
 		},
 	}
 
-	app := NewManagementServer(jm, Config{
+	app := NewManagementServer(jm, &Config{
 		Web: web.Config{
 			Port: 5000,
 		},
 	})
 
-	contents, meta, err := web.MockGet(app, "/").BytesWithResponse()
+	contents, meta, err := app.Mock().Get("/").BytesWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.Contains(string(contents), jobName)
 	assert.Contains(string(contents), invocationID)
 
-	contents, meta, err = web.MockGet(app, fmt.Sprintf("/job.invocation/%s/%s", jobName, invocationID)).BytesWithResponse()
+	contents, meta, err = app.Mock().Get(fmt.Sprintf("/job.invocation/%s/%s", jobName, invocationID)).BytesWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode)
 	assert.Contains(string(contents), jobName)

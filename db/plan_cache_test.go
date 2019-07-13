@@ -4,13 +4,13 @@ import (
 	"context"
 	"testing"
 
-	assert "github.com/blend/go-sdk/assert"
+	assert "go-sdk/assert"
 )
 
 func TestStatementCachePrepare(t *testing.T) {
 	assert := assert.New(t)
 
-	sc := NewPlanCache().WithConnection(defaultDB().Connection)
+	sc := NewPlanCache().WithConnection(Default().Connection())
 
 	query := "select 'ok'"
 	stmt, err := sc.PrepareContext(context.Background(), query, query)

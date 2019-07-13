@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestGetPort(t *testing.T) {

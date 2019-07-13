@@ -4,13 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
-
-// KeyPairFromPaths returns a key pair from paths.
-func KeyPairFromPaths(certPath, keyPath string) KeyPair {
-	return KeyPair{CertPath: certPath, KeyPath: keyPath}
-}
 
 // KeyPair is an x509 pem key pair as strings.
 type KeyPair struct {
@@ -34,11 +29,11 @@ func (kp KeyPair) CertBytes() ([]byte, error) {
 		return []byte(kp.Cert), nil
 	}
 	if kp.CertPath == "" {
-		return nil, ex.New("error loading cert; cert path unset")
+		return nil, exception.New("error loading cert; cert path unset")
 	}
 	contents, err := ioutil.ReadFile(os.ExpandEnv(kp.CertPath))
 	if err != nil {
-		return nil, ex.New("error loading cert from path", ex.OptInner(err), ex.OptMessage(kp.CertPath))
+		return nil, exception.New("error loading cert from path").WithInner(err).WithMessage(kp.CertPath)
 	}
 	return contents, nil
 }
@@ -49,11 +44,11 @@ func (kp KeyPair) KeyBytes() ([]byte, error) {
 		return []byte(kp.Key), nil
 	}
 	if kp.KeyPath == "" {
-		return nil, ex.New("error loading key; key path unset")
+		return nil, exception.New("error loading key; key path unset")
 	}
 	contents, err := ioutil.ReadFile(os.ExpandEnv(kp.KeyPath))
 	if err != nil {
-		return nil, ex.New("error loading key from path", ex.OptInner(err), ex.OptMessage(kp.KeyPath))
+		return nil, exception.New("error loading key from path").WithInner(err).WithMessage(kp.KeyPath)
 	}
 	return contents, nil
 }

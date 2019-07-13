@@ -1,6 +1,6 @@
 package grpcutil
 
-import "github.com/blend/go-sdk/graceful"
+import "go-sdk/graceful"
 
 // Validate the interface is satisfied.
 var (

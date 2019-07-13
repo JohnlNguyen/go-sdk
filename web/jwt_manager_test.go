@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/crypto"
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/jwt"
-	"github.com/blend/go-sdk/uuid"
+	"go-sdk/assert"
+	"go-sdk/crypto"
+	"go-sdk/exception"
+	"go-sdk/jwt"
+	"go-sdk/uuid"
 )
 
 func TestNewJWTManager(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewJWTManagerKeyFunc(t *testing.T) {
 		Claims: jwt.MapClaims{},
 	})
 
-	assert.True(ex.Is(ErrJWTNonstandardClaims, err))
+	assert.True(exception.Is(ErrJWTNonstandardClaims, err))
 
 	claims := &jwt.StandardClaims{
 		ID:        uuid.V4().String(),
@@ -110,11 +110,11 @@ func TestNewJWTManagerSerialization(t *testing.T) {
 		ExpiresUTC: time.Now().UTC().Add(time.Hour),
 	}
 
-	output, err := m.SerializeSessionValueHandler(nil, session)
+	output, err := m.SerializeSessionValueHandler(nil, session, nil)
 	assert.Nil(err)
 	assert.NotEmpty(output)
 
-	parsed, err := m.ParseSessionValueHandler(nil, output)
+	parsed, err := m.ParseSessionValueHandler(nil, output, nil)
 	assert.Nil(err)
 	assert.Equal(parsed.SessionID, session.SessionID)
 	assert.Equal(parsed.BaseURL, session.BaseURL)

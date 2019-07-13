@@ -7,9 +7,9 @@ Basics
 
 To create a web server:
 
-	import "github.com/blend/go-sdk/graceful"
-	import "github.com/blend/go-sdk/logger"
-	import "github.com/blend/go-sdk/web"
+	import "go-sdk/graceful"
+	import "go-sdk/logger"
+	import "go-sdk/web"
 
 	...
 

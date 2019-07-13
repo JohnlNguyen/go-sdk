@@ -5,8 +5,35 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
+
+// OptSecureToken sets the secure token on the state.
+func OptSecureToken(secureToken string) StateOption {
+	return func(s *State) {
+		s.SecureToken = secureToken
+	}
+}
+
+// OptRedirectURI sets the redirect uri on the stae.
+func OptRedirectURI(redirectURI string) StateOption {
+	return func(s *State) {
+		s.RedirectURI = redirectURI
+	}
+}
+
+// OptExtra sets the redirect uri on the stae.
+func OptExtra(key string, value interface{}) StateOption {
+	return func(s *State) {
+		if s.Extra == nil {
+			s.Extra = make(map[string]interface{})
+		}
+		s.Extra[key] = value
+	}
+}
+
+// StateOption is an option for state objects
+type StateOption func(*State)
 
 // State is the oauth state.
 type State struct {
@@ -26,12 +53,12 @@ func DeserializeState(raw string) (state State, err error) {
 	var corpus []byte
 	corpus, err = base64.StdEncoding.DecodeString(raw)
 	if err != nil {
-		err = ex.New(err)
+		err = exception.New(err)
 		return
 	}
 	buffer := bytes.NewBuffer(corpus)
 	if err = gob.NewDecoder(buffer).Decode(&state); err != nil {
-		err = ex.New(err)
+		err = exception.New(err)
 		return
 	}
 

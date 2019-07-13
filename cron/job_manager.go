@@ -7,32 +7,89 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/blend/go-sdk/async"
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/async"
+	"go-sdk/exception"
+	"go-sdk/logger"
 )
 
 // New returns a new job manager.
-func New(options ...JobManagerOption) *JobManager {
+func New() *JobManager {
 	jm := JobManager{
-		Latch: async.NewLatch(),
-		Jobs:  map[string]*JobScheduler{},
-	}
-	for _, option := range options {
-		option(&jm)
+		latch: &async.Latch{},
+		jobs:  map[string]*JobScheduler{},
 	}
 	return &jm
+}
+
+// NewFromConfig returns a new job manager from a given config.
+func NewFromConfig(cfg *Config) *JobManager {
+	return New().WithConfig(cfg)
+}
+
+// NewFromEnv returns a new job manager from the environment.
+func NewFromEnv() (*JobManager, error) {
+	cfg, err := NewConfigFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewFromConfig(cfg), nil
+}
+
+// MustNewFromEnv returns a new job manager from the environment.
+func MustNewFromEnv() *JobManager {
+	cfg, err := NewConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return NewFromConfig(cfg)
 }
 
 // JobManager is the main orchestration and job management object.
 type JobManager struct {
 	sync.Mutex
-	*async.Latch
+	latch  *async.Latch
+	cfg    *Config
+	tracer Tracer
+	log    logger.FullReceiver
+	jobs   map[string]*JobScheduler
+}
 
-	Config Config
-	Tracer Tracer
-	Log    logger.Log
-	Jobs   map[string]*JobScheduler
+// WithLogger sets the logger and returns a reference to the job manager.
+func (jm *JobManager) WithLogger(log logger.FullReceiver) *JobManager {
+	jm.log = log
+	return jm
+}
+
+// Logger returns the diagnostics agent.
+func (jm *JobManager) Logger() logger.FullReceiver {
+	return jm.log
+}
+
+// Config returns the job manager config.
+func (jm *JobManager) Config() *Config {
+	return jm.cfg
+}
+
+// WithConfig sets the job manager config.
+func (jm *JobManager) WithConfig(cfg *Config) *JobManager {
+	jm.cfg = cfg
+	return jm
+}
+
+// WithTracer sets the manager's tracer.
+func (jm *JobManager) WithTracer(tracer Tracer) *JobManager {
+	jm.tracer = tracer
+	return jm
+}
+
+// Tracer returns the manager's tracer.
+func (jm *JobManager) Tracer() Tracer {
+	return jm.tracer
+}
+
+// Latch returns the internal latch.
+func (jm *JobManager) Latch() *async.Latch {
+	return jm.latch
 }
 
 // --------------------------------------------------------------------------------
@@ -43,18 +100,26 @@ type JobManager struct {
 func (jm *JobManager) LoadJobs(jobs ...Job) error {
 	jm.Lock()
 	defer jm.Unlock()
-
 	for _, job := range jobs {
 		jobName := job.Name()
-		if _, hasJob := jm.Jobs[jobName]; hasJob {
-			return ex.New(ErrJobAlreadyLoaded, ex.OptMessagef("job: %s", job.Name()))
+		if _, hasJob := jm.jobs[jobName]; hasJob {
+			return exception.New(ErrJobAlreadyLoaded).WithMessagef("job: %s", job.Name())
 		}
-		jm.Jobs[jobName] = NewJobScheduler(job,
-			OptJobSchedulerTracer(jm.Tracer),
-			OptJobSchedulerLog(jm.Log),
-			OptJobSchedulerConfig(jm.Config),
-		)
+		jm.jobs[jobName] = NewJobScheduler(jm.cfg, job).WithTracer(jm.tracer).WithLogger(jm.log)
 	}
+	return nil
+}
+
+// LoadJob loads a job.
+func (jm *JobManager) LoadJob(job Job) error {
+	jm.Lock()
+	defer jm.Unlock()
+
+	jobName := job.Name()
+	if _, hasJob := jm.jobs[jobName]; hasJob {
+		return exception.New(ErrJobAlreadyLoaded).WithMessagef("job: %s", job.Name())
+	}
+	jm.jobs[jobName] = NewJobScheduler(jm.cfg, job).WithTracer(jm.tracer).WithLogger(jm.log)
 	return nil
 }
 
@@ -64,12 +129,25 @@ func (jm *JobManager) DisableJobs(jobNames ...string) error {
 	defer jm.Unlock()
 
 	for _, jobName := range jobNames {
-		if job, ok := jm.Jobs[jobName]; ok {
+		if job, ok := jm.jobs[jobName]; ok {
 			job.Disable()
 		} else {
-			return ex.New(ErrJobNotFound, ex.OptMessagef("job: %s", jobName))
+			return exception.New(ErrJobNotFound).WithMessagef("job: %s", jobName)
 		}
 	}
+	return nil
+}
+
+// DisableJob stops a job from running but does not unload it.
+func (jm *JobManager) DisableJob(jobName string) error {
+	jm.Lock()
+	defer jm.Unlock()
+
+	job, ok := jm.jobs[jobName]
+	if !ok {
+		return exception.New(ErrJobNotFound).WithMessagef("job: %s", jobName)
+	}
+	job.Disable()
 	return nil
 }
 
@@ -79,12 +157,24 @@ func (jm *JobManager) EnableJobs(jobNames ...string) error {
 	defer jm.Unlock()
 
 	for _, jobName := range jobNames {
-		if job, ok := jm.Jobs[jobName]; ok {
+		if job, ok := jm.jobs[jobName]; ok {
 			job.Enable()
 		} else {
-			return ex.New(ErrJobNotFound, ex.OptMessagef("job: %s", jobName))
+			return exception.New(ErrJobNotFound).WithMessagef("job: %s", jobName)
 		}
 	}
+	return nil
+}
+
+// EnableJob enables a job that has been disabled.
+func (jm *JobManager) EnableJob(jobName string) error {
+	jm.Lock()
+	defer jm.Unlock()
+	job, ok := jm.jobs[jobName]
+	if !ok {
+		return exception.New(ErrJobNotFound).WithMessagef("job: %s", jobName)
+	}
+	job.Enable()
 	return nil
 }
 
@@ -92,7 +182,7 @@ func (jm *JobManager) EnableJobs(jobNames ...string) error {
 func (jm *JobManager) HasJob(jobName string) (hasJob bool) {
 	jm.Lock()
 	defer jm.Unlock()
-	_, hasJob = jm.Jobs[jobName]
+	_, hasJob = jm.jobs[jobName]
 	return
 }
 
@@ -100,10 +190,10 @@ func (jm *JobManager) HasJob(jobName string) (hasJob bool) {
 func (jm *JobManager) Job(jobName string) (job *JobScheduler, err error) {
 	jm.Lock()
 	defer jm.Unlock()
-	if jobScheduler, hasJob := jm.Jobs[jobName]; hasJob {
+	if jobScheduler, hasJob := jm.jobs[jobName]; hasJob {
 		job = jobScheduler
 	} else {
-		err = ex.New(ErrJobNotLoaded, ex.OptMessagef("job: %s", jobName))
+		err = exception.New(ErrJobNotLoaded).WithMessagef("job: %s", jobName)
 	}
 	return
 }
@@ -113,7 +203,7 @@ func (jm *JobManager) IsJobDisabled(jobName string) (value bool) {
 	jm.Lock()
 	defer jm.Unlock()
 
-	if job, hasJob := jm.Jobs[jobName]; hasJob {
+	if job, hasJob := jm.jobs[jobName]; hasJob {
 		value = job.Disabled
 		if job.EnabledProvider != nil {
 			value = value || !job.EnabledProvider()
@@ -127,7 +217,7 @@ func (jm *JobManager) IsJobRunning(jobName string) (isRunning bool) {
 	jm.Lock()
 	defer jm.Unlock()
 
-	if job, ok := jm.Jobs[jobName]; ok {
+	if job, ok := jm.jobs[jobName]; ok {
 		isRunning = job.Current != nil
 	}
 	return
@@ -139,10 +229,10 @@ func (jm *JobManager) RunJobs(jobNames ...string) error {
 	defer jm.Unlock()
 
 	for _, jobName := range jobNames {
-		if job, ok := jm.Jobs[jobName]; ok {
+		if job, ok := jm.jobs[jobName]; ok {
 			job.Run()
 		} else {
-			return ex.New(ErrJobNotLoaded, ex.OptMessagef("job: %s", jobName))
+			return exception.New(ErrJobNotLoaded).WithMessagef("job: %s", jobName)
 		}
 	}
 	return nil
@@ -152,10 +242,9 @@ func (jm *JobManager) RunJobs(jobNames ...string) error {
 func (jm *JobManager) RunJob(jobName string) error {
 	jm.Lock()
 	defer jm.Unlock()
-
-	job, ok := jm.Jobs[jobName]
+	job, ok := jm.jobs[jobName]
 	if !ok {
-		return ex.New(ErrJobNotLoaded, ex.OptMessagef("job: %s", jobName))
+		return exception.New(ErrJobNotLoaded).WithMessagef("job: %s", jobName)
 	}
 	go job.Run()
 	return nil
@@ -166,7 +255,7 @@ func (jm *JobManager) RunAllJobs() {
 	jm.Lock()
 	defer jm.Unlock()
 
-	for _, job := range jm.Jobs {
+	for _, job := range jm.jobs {
 		go job.Run()
 	}
 }
@@ -176,9 +265,9 @@ func (jm *JobManager) CancelJob(jobName string) (err error) {
 	jm.Lock()
 	defer jm.Unlock()
 
-	job, ok := jm.Jobs[jobName]
+	job, ok := jm.jobs[jobName]
 	if !ok {
-		err = ex.New(ErrJobNotFound, ex.OptMessagef("job: %s", jobName))
+		err = exception.New(ErrJobNotFound).WithMessagef("job: %s", jobName)
 		return
 	}
 	job.Cancel()
@@ -194,7 +283,7 @@ func (jm *JobManager) Status() *Status {
 		Running: map[string][]*JobInvocation{},
 	}
 
-	for _, job := range jm.Jobs {
+	for _, job := range jm.jobs {
 		status.Jobs = append(status.Jobs, job)
 
 		if job.Current != nil {
@@ -214,37 +303,52 @@ func (jm *JobManager) Start() error {
 	if err := jm.StartAsync(); err != nil {
 		return err
 	}
-	<-jm.NotifyStopped()
+	<-jm.latch.NotifyStopped()
 	return nil
 }
 
 // StartAsync starts the job manager and the loaded jobs.
 // It does not block.
 func (jm *JobManager) StartAsync() error {
-	if !jm.CanStart() {
+	if !jm.latch.CanStart() {
 		return fmt.Errorf("already started")
 	}
-	jm.Starting()
-	for _, job := range jm.Jobs {
-		job.Log = jm.Log
-		job.Tracer = jm.Tracer
-		job.Config = jm.Config
-		go job.Start()
-		<-job.NotifyStarted()
+	jm.latch.Starting()
+	var err error
+	for _, job := range jm.jobs {
+		if err = job.WithTracer(jm.tracer).WithLogger(jm.log).StartAsync(); err != nil {
+			return err
+		}
 	}
-	jm.Started()
+	jm.latch.Started()
 	return nil
 }
 
 // Stop stops the schedule runner for a JobManager.
 func (jm *JobManager) Stop() error {
-	if !jm.CanStop() {
+	if !jm.latch.CanStop() {
 		return fmt.Errorf("already stopped")
 	}
-	jm.Stopping()
-	for _, job := range jm.Jobs {
+	jm.latch.Stopping()
+	for _, job := range jm.jobs {
 		job.Stop()
 	}
-	jm.Stopped()
+	jm.latch.Stopped()
 	return nil
+}
+
+// NotifyStarted returns the started notification channel.
+func (jm *JobManager) NotifyStarted() <-chan struct{} {
+	return jm.latch.NotifyStarted()
+}
+
+// NotifyStopped returns the stopped notification channel.
+func (jm *JobManager) NotifyStopped() <-chan struct{} {
+	return jm.latch.NotifyStopped()
+}
+
+// IsRunning returns if the job manager is running.
+// It serves as an authoritative healthcheck.
+func (jm *JobManager) IsRunning() bool {
+	return jm.latch.IsRunning()
 }

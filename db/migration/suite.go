@@ -4,47 +4,81 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/blend/go-sdk/db"
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/db"
+	"go-sdk/exception"
+	"go-sdk/logger"
+)
+
+const (
+	// StatApplied is a stat name.
+	StatApplied = "applied"
+	// StatFailed is a stat name.
+	StatFailed = "failed"
+	// StatSkipped is a stat name.
+	StatSkipped = "skipped"
+	// StatTotal is a stat name.
+	StatTotal = "total"
 )
 
 // New returns a new suite of groups.
-func New(options ...SuiteOption) *Suite {
-	var s Suite
-	for _, option := range options {
-		option(&s)
+func New(groups ...GroupedActions) *Suite {
+	return &Suite{
+		ctx:    context.Background(),
+		groups: groups,
 	}
-	return &s
-}
-
-// NewWithGroups is a helper for "New(OptGroups(groups ...*Group))"
-func NewWithGroups(actions ...*Group) *Suite {
-	return New(OptGroups(actions...))
 }
 
 // Suite is a migration suite.
 type Suite struct {
-	Log    logger.Log
-	Groups []*Group
+	ctx    context.Context
+	log    logger.Log
+	groups []GroupedActions
 
-	Applied int
-	Skipped int
-	Failed  int
-	Total   int
+	applied int
+	skipped int
+	failed  int
+	total   int
+}
+
+// WithContext sets the suite context.
+func (s *Suite) WithContext(ctx context.Context) *Suite {
+	s.ctx = ctx
+	return s
+}
+
+// Context returns the suite context.
+func (s *Suite) Context() context.Context {
+	return s.ctx
+}
+
+// WithLogger sets the suite logger.
+func (s *Suite) WithLogger(log logger.Log) *Suite {
+	s.log = log
+	return s
+}
+
+// Logger returns the underlying logger.
+func (s *Suite) Logger() logger.Log {
+	return s.log
+}
+
+// WithGroups adds groups to the suite and returns the suite.
+func (s *Suite) WithGroups(groups ...GroupedActions) *Suite {
+	s.groups = append(s.groups, groups...)
+	return s
 }
 
 // Apply applies the suite.
-func (s *Suite) Apply(ctx context.Context, c *db.Connection) (err error) {
-	defer s.WriteStats(ctx)
+func (s *Suite) Apply(c *db.Connection) (err error) {
+	defer s.WriteStats()
 	defer func() {
 		if r := recover(); r != nil {
-			err = ex.New(r)
+			err = exception.New(r)
 		}
 	}()
 
-	for _, group := range s.Groups {
-		if err = group.Action(WithSuite(ctx, s), c); err != nil {
+	for _, group := range s.groups {
+		if err = group.Action(WithSuite(s.Context(), s), c); err != nil {
 			return
 		}
 	}
@@ -53,43 +87,40 @@ func (s *Suite) Apply(ctx context.Context, c *db.Connection) (err error) {
 
 // Applyf writes an applied step message.
 func (s *Suite) Applyf(ctx context.Context, format string, args ...interface{}) {
-	s.Applied = s.Applied + 1
-	s.Total = s.Total + 1
+	s.applied = s.applied + 1
+	s.total = s.total + 1
 	s.Write(ctx, StatApplied, fmt.Sprintf(format, args...))
 }
 
 // Skipf skips a given step.
 func (s *Suite) Skipf(ctx context.Context, format string, args ...interface{}) {
-	s.Skipped = s.Skipped + 1
-	s.Total = s.Total + 1
+	s.skipped = s.skipped + 1
+	s.total = s.total + 1
 	s.Write(ctx, StatSkipped, fmt.Sprintf(format, args...))
 }
 
 // Errorf writes an error for a given step.
 func (s *Suite) Errorf(ctx context.Context, format string, args ...interface{}) {
-	s.Failed = s.Failed + 1
-	s.Total = s.Total + 1
+	s.failed = s.failed + 1
+	s.total = s.total + 1
 	s.Write(ctx, StatFailed, fmt.Sprintf(format, args...))
 }
 
 // Error
 func (s *Suite) Error(ctx context.Context, err error) error {
-	s.Failed = s.Failed + 1
-	s.Total = s.Total + 1
+	s.failed = s.failed + 1
+	s.total = s.total + 1
 	s.Write(ctx, StatFailed, fmt.Sprintf("%v", err))
 	return err
 }
 
 func (s *Suite) Write(ctx context.Context, result, body string) {
-	logger.MaybeTrigger(ctx, s.Log, NewEvent(result, body, GetContextLabels(ctx)...))
+	logger.MaybeSyncTrigger(s.log, NewEvent(result, body, GetContextLabels(ctx)...))
 }
 
 // WriteStats writes the stats if a logger is configured.
-func (s *Suite) WriteStats(ctx context.Context) {
-	logger.MaybeTrigger(ctx, s.Log, NewStatsEvent(s.Applied, s.Skipped, s.Failed, s.Total))
-}
-
-// Results provides a window into the results of this migration
-func (s *Suite) Results() (applied, skipped, failed, total int) {
-	return s.Applied, s.Skipped, s.Failed, s.Total
+func (s *Suite) WriteStats() {
+	if s.log != nil {
+		s.log.SyncTrigger(NewStatsEvent(s.applied, s.skipped, s.failed, s.total))
+	}
 }

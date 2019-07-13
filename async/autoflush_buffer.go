@@ -1,63 +1,21 @@
 package async
 
 import (
-	"context"
+	"sync"
 	"time"
 
-	"github.com/blend/go-sdk/collections"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/collections"
+	"go-sdk/exception"
 )
 
 // NewAutoflushBuffer creates a new autoflush buffer.
-func NewAutoflushBuffer(handler AutoflushAction, options ...AutoflushBufferOption) *AutoflushBuffer {
-	afb := AutoflushBuffer{
-		Latch:       NewLatch(),
-		Handler:     handler,
-		MaxLen:      DefaultQueueMaxWork,
-		Interval:    DefaultInterval,
-		FlushOnStop: true,
-	}
-	for _, option := range options {
-		option(&afb)
-	}
-	return &afb
-}
-
-// AutoflushBufferOption is an option for auto-flush buffers.
-type AutoflushBufferOption func(*AutoflushBuffer)
-
-// OptAutoflushBufferMaxLen sets the auto-flush buffer's maximum length.
-func OptAutoflushBufferMaxLen(maxLen int) AutoflushBufferOption {
-	return func(afb *AutoflushBuffer) {
-		afb.MaxLen = maxLen
-	}
-}
-
-// OptAutoflushBufferInterval sets the auto-flush buffer's interval.
-func OptAutoflushBufferInterval(d time.Duration) AutoflushBufferOption {
-	return func(afb *AutoflushBuffer) {
-		afb.Interval = d
-	}
-}
-
-// OptAutoflushBufferContext sets the auto-flush buffer's context.
-func OptAutoflushBufferContext(ctx context.Context) AutoflushBufferOption {
-	return func(afb *AutoflushBuffer) {
-		afb.Context = ctx
-	}
-}
-
-// OptAutoflushBufferErrors sets the auto-flush buffer's error return channel.
-func OptAutoflushBufferErrors(errors chan error) AutoflushBufferOption {
-	return func(afb *AutoflushBuffer) {
-		afb.Errors = errors
-	}
-}
-
-// OptAutoflushBufferFlushOnStop sets the auto-flush buffer's flush on stop option.
-func OptAutoflushBufferFlushOnStop(flushOnStop bool) AutoflushBufferOption {
-	return func(afb *AutoflushBuffer) {
-		afb.FlushOnStop = flushOnStop
+func NewAutoflushBuffer(maxLen int, interval time.Duration) *AutoflushBuffer {
+	return &AutoflushBuffer{
+		maxLen:       maxLen,
+		interval:     interval,
+		flushOnAbort: true,
+		contents:     collections.NewRingBufferWithCapacity(maxLen),
+		latch:        &Latch{},
 	}
 }
 
@@ -65,131 +23,156 @@ func OptAutoflushBufferFlushOnStop(flushOnStop bool) AutoflushBufferOption {
 // A handler should be provided but without one the buffer will just clear.
 // Adds that would cause fixed length flushes do not block on the flush handler.
 type AutoflushBuffer struct {
-	*Latch
-	Context     context.Context
-	MaxLen      int
-	Interval    time.Duration
-	Contents    *collections.RingBuffer
-	FlushOnStop bool
-	Handler     AutoflushAction
-	Errors      chan error
+	maxLen   int
+	interval time.Duration
+
+	contents     *collections.RingBuffer
+	contentsLock sync.Mutex
+
+	flushOnAbort bool
+	handler      func(obj []interface{})
+
+	latch *Latch
 }
 
-// Background returns a background context.
-func (ab *AutoflushBuffer) Background() context.Context {
-	if ab.Context != nil {
-		return ab.Context
-	}
-	return context.Background()
+// WithFlushOnAbort sets if we should flush on aborts or not.
+// This defaults to true.
+func (ab *AutoflushBuffer) WithFlushOnAbort(should bool) *AutoflushBuffer {
+	ab.flushOnAbort = should
+	return ab
 }
 
-/*
-Start starts the auto-flush buffer.
-This call blocks. To call it asynchronously:
+// ShouldFlushOnAbort returns if the buffer will do one final flush on abort.
+func (ab *AutoflushBuffer) ShouldFlushOnAbort() bool {
+	return ab.flushOnAbort
+}
 
-	go afb.Start()
-	<-afb.NotifyStarted()
-*/
+// Interval returns the flush interval.
+func (ab *AutoflushBuffer) Interval() time.Duration {
+	return ab.interval
+}
+
+// MaxLen returns the maximum buffer length before a flush is triggered.
+func (ab *AutoflushBuffer) MaxLen() int {
+	return ab.maxLen
+}
+
+// WithFlushHandler sets the buffer flush handler and returns a reference to the buffer.
+func (ab *AutoflushBuffer) WithFlushHandler(handler func(objs []interface{})) *AutoflushBuffer {
+	ab.handler = handler
+	return ab
+}
+
+// NotifyStarted returns the started signal.
+func (ab *AutoflushBuffer) NotifyStarted() <-chan struct{} {
+	return ab.latch.NotifyStarted()
+}
+
+// NotifyStopped returns the started stopped.
+func (ab *AutoflushBuffer) NotifyStopped() <-chan struct{} {
+	return ab.latch.NotifyStopped()
+}
+
+// Start starts the buffer flusher.
 func (ab *AutoflushBuffer) Start() error {
-	if !ab.CanStart() {
-		return ex.New(ErrCannotStart)
+	if !ab.latch.CanStart() {
+		return exception.New(ErrCannotStart)
 	}
-	ab.Starting()
-	ab.Contents = collections.NewRingBufferWithCapacity(ab.MaxLen)
-	ab.Dispatch()
+	ab.latch.Starting()
+	go func() {
+		ab.latch.Started()
+		ab.runLoop()
+	}()
+	<-ab.latch.NotifyStarted()
 	return nil
-}
-
-// Dispatch is the main run loop.
-func (ab *AutoflushBuffer) Dispatch() {
-	ab.Started()
-	ticker := time.Tick(ab.Interval)
-	for {
-		select {
-		case <-ticker:
-			ab.FlushAsync(ab.Background())
-		case <-ab.NotifyPausing():
-			ab.Paused()
-			select {
-			case <-ab.NotifyResuming():
-				ab.Started()
-			case <-ab.NotifyStopping():
-				ab.Stopped()
-				return
-			}
-		case <-ab.NotifyStopping():
-			if ab.FlushOnStop {
-				ab.Flush(ab.Background())
-			}
-			ab.Stopped()
-			return
-		}
-	}
 }
 
 // Stop stops the buffer flusher.
 func (ab *AutoflushBuffer) Stop() error {
-	if !ab.CanStop() {
-		return ex.New(ErrCannotStop)
+	if !ab.latch.CanStop() {
+		return exception.New(ErrCannotStop)
 	}
-	ab.Stopping()
-	<-ab.NotifyStopped()
+	ab.latch.Stopping()
+	<-ab.latch.NotifyStopped()
 	return nil
 }
 
 // Add adds a new object to the buffer, blocking if it triggers a flush.
 // If the buffer is full, it will call the flush handler on a separate goroutine.
 func (ab *AutoflushBuffer) Add(obj interface{}) {
-	ab.Lock()
-	defer ab.Unlock()
+	ab.contentsLock.Lock()
+	defer ab.contentsLock.Unlock()
 
-	ab.Contents.Enqueue(obj)
-	if ab.Contents.Len() >= ab.MaxLen {
-		ab.flushUnsafeAsync(ab.Background(), ab.Contents.Drain())
+	ab.contents.Enqueue(obj)
+	if ab.contents.Len() >= ab.maxLen {
+		ab.flushUnsafeAsync()
 	}
 }
 
 // AddMany adds many objects to the buffer at once.
 func (ab *AutoflushBuffer) AddMany(objs ...interface{}) {
-	ab.Lock()
-	defer ab.Unlock()
+	ab.contentsLock.Lock()
+	defer ab.contentsLock.Unlock()
 
 	for _, obj := range objs {
-		ab.Contents.Enqueue(obj)
-		if ab.Contents.Len() >= ab.MaxLen {
-			ab.flushUnsafeAsync(ab.Background(), ab.Contents.Drain())
+		ab.contents.Enqueue(obj)
+		if ab.contents.Len() >= ab.maxLen {
+			ab.flushUnsafeAsync()
 		}
 	}
 }
 
 // Flush clears the buffer, if a handler is provided it is passed the contents of the buffer.
 // This call is synchronous, in that it will call the flush handler on the same goroutine.
-func (ab *AutoflushBuffer) Flush(ctx context.Context) {
-	ab.Lock()
-	defer ab.Unlock()
-	ab.flushUnsafe(ctx, ab.Contents.Drain())
+func (ab *AutoflushBuffer) Flush() {
+	ab.contentsLock.Lock()
+	defer ab.contentsLock.Unlock()
+	ab.flushUnsafe()
 }
 
 // FlushAsync clears the buffer, if a handler is provided it is passed the contents of the buffer.
 // This call is asynchronous, in that it will call the flush handler on its own goroutine.
-func (ab *AutoflushBuffer) FlushAsync(ctx context.Context) {
-	ab.Lock()
-	defer ab.Unlock()
-	ab.flushUnsafeAsync(ctx, ab.Contents.Drain())
+func (ab *AutoflushBuffer) FlushAsync() {
+	ab.contentsLock.Lock()
+	defer ab.contentsLock.Unlock()
+	ab.flushUnsafeAsync()
 }
 
 // flushUnsafeAsync flushes the buffer without acquiring any locks.
-func (ab *AutoflushBuffer) flushUnsafeAsync(ctx context.Context, contents []interface{}) {
-	go ab.flushUnsafe(ctx, contents)
+func (ab *AutoflushBuffer) flushUnsafeAsync() {
+	if ab.handler != nil {
+		if ab.contents.Len() > 0 {
+			contents := ab.contents.Drain()
+			go ab.handler(contents)
+		}
+	} else {
+		ab.contents.Clear()
+	}
 }
 
 // flushUnsafeAsync flushes the buffer without acquiring any locks.
-func (ab *AutoflushBuffer) flushUnsafe(ctx context.Context, contents []interface{}) {
-	if ab.Handler != nil {
-		if len(contents) > 0 {
-			Recover(func() error {
-				return ab.Handler(ctx, contents)
-			}, ab.Errors)
+func (ab *AutoflushBuffer) flushUnsafe() {
+	if ab.handler != nil {
+		if ab.contents.Len() > 0 {
+			ab.handler(ab.contents.Drain())
+		}
+	} else {
+		ab.contents.Clear()
+	}
+}
+
+func (ab *AutoflushBuffer) runLoop() {
+	ticker := time.Tick(ab.interval)
+	for {
+		select {
+		case <-ticker:
+			ab.FlushAsync()
+		case <-ab.latch.NotifyStopping():
+			if ab.flushOnAbort {
+				ab.Flush()
+			}
+			ab.latch.Stopped()
+			return
 		}
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // Webhook is a configurable request.
@@ -34,7 +34,7 @@ func (wh Webhook) MethodOrDefault() string {
 func (wh Webhook) Send() (*http.Response, error) {
 	u, err := url.Parse(wh.URL)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 
 	req := &http.Request{
@@ -52,7 +52,7 @@ func (wh Webhook) Send() (*http.Response, error) {
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	return res, nil
 }

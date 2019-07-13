@@ -3,60 +3,12 @@ package jobkit
 import (
 	"context"
 
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/cron"
+	"go-sdk/logger"
 )
 
-// LogSubContextDebugf is a logger interface.
-type LogSubContextDebugf interface {
-	logger.DebugfReceiver
-	logger.SubContexter
-}
-
-// LogSubContextInfof is a logger interface.
-type LogSubContextInfof interface {
-	logger.InfofReceiver
-	logger.SubContexter
-}
-
-// LogSubContextWarningf is a logger interface.
-type LogSubContextWarningf interface {
-	logger.WarningfReceiver
-	logger.SubContexter
-}
-
-// LogSubContextWarning is a logger interface.
-type LogSubContextWarning interface {
-	logger.WarningReceiver
-	logger.SubContexter
-}
-
-// LogSubContextErrorf is a logger interface.
-type LogSubContextErrorf interface {
-	logger.ErrorfReceiver
-	logger.SubContexter
-}
-
-// LogSubContextError is a logger interface.
-type LogSubContextError interface {
-	logger.ErrorReceiver
-	logger.SubContexter
-}
-
-// LogSubContextFatalf is a logger interface.
-type LogSubContextFatalf interface {
-	logger.FatalfReceiver
-	logger.SubContexter
-}
-
-// LogSubContextFatal is a logger interface.
-type LogSubContextFatal interface {
-	logger.FatalReceiver
-	logger.SubContexter
-}
-
 // Debugf prints an info message if the logger is set.
-func Debugf(ctx context.Context, log LogSubContextDebugf, format string, args ...interface{}) {
+func Debugf(ctx context.Context, log logger.Log, format string, args ...interface{}) {
 	if log == nil {
 		return
 	}
@@ -65,7 +17,7 @@ func Debugf(ctx context.Context, log LogSubContextDebugf, format string, args ..
 }
 
 // Infof prints an info message if the logger is set.
-func Infof(ctx context.Context, log LogSubContextInfof, format string, args ...interface{}) {
+func Infof(ctx context.Context, log logger.Log, format string, args ...interface{}) {
 	if log == nil {
 		return
 	}
@@ -74,7 +26,7 @@ func Infof(ctx context.Context, log LogSubContextInfof, format string, args ...i
 }
 
 // Warningf prints a warning message if the logger is set.
-func Warningf(ctx context.Context, log LogSubContextWarningf, format string, args ...interface{}) {
+func Warningf(ctx context.Context, log logger.Log, format string, args ...interface{}) {
 	if log == nil {
 		return
 	}
@@ -83,7 +35,7 @@ func Warningf(ctx context.Context, log LogSubContextWarningf, format string, arg
 }
 
 // Warning prints an warning if the logger is set.
-func Warning(ctx context.Context, log LogSubContextWarning, err error) {
+func Warning(ctx context.Context, log logger.Log, err error) {
 	if log == nil {
 		return
 	}
@@ -92,7 +44,7 @@ func Warning(ctx context.Context, log LogSubContextWarning, err error) {
 }
 
 // Errorf prints an error message if the logger is set.
-func Errorf(ctx context.Context, log LogSubContextErrorf, format string, args ...interface{}) {
+func Errorf(ctx context.Context, log logger.Log, format string, args ...interface{}) {
 	if log == nil {
 		return
 	}
@@ -101,7 +53,7 @@ func Errorf(ctx context.Context, log LogSubContextErrorf, format string, args ..
 }
 
 // Error prints an error if the logger is set.
-func Error(ctx context.Context, log LogSubContextError, err error) {
+func Error(ctx context.Context, log logger.Log, err error) {
 	if log == nil {
 		return
 	}
@@ -110,7 +62,7 @@ func Error(ctx context.Context, log LogSubContextError, err error) {
 }
 
 // Fatalf prints a fatal error message if the logger is set.
-func Fatalf(ctx context.Context, log LogSubContextFatalf, format string, args ...interface{}) {
+func Fatalf(ctx context.Context, log logger.Log, format string, args ...interface{}) {
 	if log == nil {
 		return
 	}
@@ -119,7 +71,7 @@ func Fatalf(ctx context.Context, log LogSubContextFatalf, format string, args ..
 }
 
 // Fatal prints a fatal error if the logger is set.
-func Fatal(ctx context.Context, log LogSubContextFatal, err error) {
+func Fatal(ctx context.Context, log logger.Log, err error) {
 	if log == nil {
 		return
 	}

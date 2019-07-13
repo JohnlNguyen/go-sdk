@@ -3,7 +3,7 @@ package test
 import (
 	"crypto/rsa"
 
-	"github.com/blend/go-sdk/jwt"
+	"go-sdk/jwt"
 )
 
 // MustLoadRSAPrivateKey loads an rsa private key and panics on error.

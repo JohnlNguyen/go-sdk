@@ -3,8 +3,8 @@ package stats
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/assert"
+	"go-sdk/logger"
 )
 
 func TestAddWebListeners(t *testing.T) {

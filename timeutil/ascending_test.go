@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestAscending(t *testing.T) {

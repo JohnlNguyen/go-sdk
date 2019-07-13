@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestWriteNoContent(t *testing.T) {

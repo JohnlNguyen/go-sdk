@@ -1,9 +1,9 @@
 package jobkit
 
 import (
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/email"
-	"github.com/blend/go-sdk/template"
+	"go-sdk/cron"
+	"go-sdk/email"
+	"go-sdk/template"
 )
 
 // NewEmailMessage returns a new email message.

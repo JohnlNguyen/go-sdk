@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/airbrake/gobrake"
-	"github.com/blend/go-sdk/diagnostics"
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/diagnostics"
+	"go-sdk/env"
+	"go-sdk/exception"
 )
 
 var (
@@ -23,7 +23,7 @@ var (
 )
 
 // MustNew returns a new notifier and panics on error.
-func MustNew(cfg Config) *Notifier {
+func MustNew(cfg *Config) *Notifier {
 	notifier, err := New(cfg)
 	if err != nil {
 		panic(err)
@@ -32,10 +32,10 @@ func MustNew(cfg Config) *Notifier {
 }
 
 // New returns a new notifier.
-func New(cfg Config) (*Notifier, error) {
+func New(cfg *Config) (*Notifier, error) {
 	parsedProjectID, err := strconv.ParseInt(cfg.ProjectID, 10, 64)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	// create a new reporter
 	client := gobrake.NewNotifierWithOptions(&gobrake.NotifierOptions{
@@ -67,13 +67,13 @@ type Notifier struct {
 // Notify sends an error.
 func (n *Notifier) Notify(err interface{}) error {
 	_, sendErr := n.Client.SendNotice(NewNotice(err, nil))
-	return ex.New(sendErr)
+	return exception.New(sendErr)
 }
 
 // NotifyWithRequest sends an error with a request.
 func (n *Notifier) NotifyWithRequest(err interface{}, req *http.Request) error {
 	_, sendErr := n.Client.SendNotice(NewNotice(err, req))
-	return ex.New(sendErr)
+	return exception.New(sendErr)
 }
 
 func getDefaultContext() map[string]interface{} {

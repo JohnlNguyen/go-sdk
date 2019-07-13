@@ -8,35 +8,34 @@ import (
 	"encoding/pem"
 	"io"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
-// NewCertBundle returns a new cert bundle from a given key pair, which can denote the raw PEM encoded
-// contents of the public and private key portions of the cert, or paths to files.
-// The CertBundle itself is the parsed public key, private key, and individual certificates for the pair.
+// NewCertBundle returns a new cert bundle from bytes.
+// A "CertBundle" is the parsed public key, private key, and individual certificates for the pair.
 func NewCertBundle(keyPair KeyPair) (*CertBundle, error) {
 	certPEM, err := keyPair.CertBytes()
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	if len(certPEM) == 0 {
-		return nil, ex.New("empty cert contents")
+		return nil, exception.New("empty cert contents")
 	}
 
 	keyPEM, err := keyPair.KeyBytes()
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	if len(keyPEM) == 0 {
-		return nil, ex.New("empty key contents")
+		return nil, exception.New("empty key contents")
 	}
 
 	certData, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	if len(certData.Certificate) == 0 {
-		return nil, ex.New("no certificates")
+		return nil, exception.New("no certificates")
 	}
 
 	var certs []x509.Certificate
@@ -44,7 +43,7 @@ func NewCertBundle(keyPair KeyPair) (*CertBundle, error) {
 	for _, certDataPortion := range certData.Certificate {
 		cert, err := x509.ParseCertificate(certDataPortion)
 		if err != nil {
-			return nil, ex.New(err)
+			return nil, exception.New(err)
 		}
 
 		certs = append(certs, *cert)
@@ -55,7 +54,7 @@ func NewCertBundle(keyPair KeyPair) (*CertBundle, error) {
 	if typed, ok := certData.PrivateKey.(*rsa.PrivateKey); ok {
 		privateKey = typed
 	} else {
-		return nil, ex.New("invalid private key type", ex.OptMessagef("%T", certData.PrivateKey))
+		return nil, exception.New("invalid private key type").WithMessagef("%T", certData.PrivateKey)
 	}
 
 	return &CertBundle{
@@ -101,8 +100,7 @@ func (cb *CertBundle) GenerateKeyPair() (output KeyPair, err error) {
 	return
 }
 
-// WithParent adds a parent certificate to the certificate chain.
-// It is used typically to add the certificate authority.
+// WithParent adds a parent certificate to the chain.
 func (cb *CertBundle) WithParent(parent *CertBundle) {
 	cb.Certificates = append(cb.Certificates, parent.Certificates...)
 	cb.CertificateDERs = append(cb.CertificateDERs, parent.CertificateDERs...)
@@ -112,19 +110,10 @@ func (cb *CertBundle) WithParent(parent *CertBundle) {
 func (cb CertBundle) WriteCertPem(w io.Writer) error {
 	for _, der := range cb.CertificateDERs {
 		if err := pem.Encode(w, &pem.Block{Type: BlockTypeCertificate, Bytes: der}); err != nil {
-			return ex.New(err)
+			return exception.New(err)
 		}
 	}
 	return nil
-}
-
-// CertPEM returns the cert portion of the certificate DERs as a byte array.
-func (cb CertBundle) CertPEM() ([]byte, error) {
-	buffer := new(bytes.Buffer)
-	if err := cb.WriteCertPem(buffer); err != nil {
-		return nil, err
-	}
-	return buffer.Bytes(), nil
 }
 
 // WriteKeyPem writes the certificate key as a pem.
@@ -132,25 +121,14 @@ func (cb CertBundle) WriteKeyPem(w io.Writer) error {
 	return pem.Encode(w, &pem.Block{Type: BlockTypeRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(cb.PrivateKey)})
 }
 
-// KeyPEM returns the cert portion of the certificate DERs as a byte array.
-func (cb CertBundle) KeyPEM() ([]byte, error) {
-	buffer := new(bytes.Buffer)
-	if err := cb.WriteKeyPem(buffer); err != nil {
-		return nil, err
-	}
-	return buffer.Bytes(), nil
-}
-
 // CommonNames returns the cert bundle common name(s).
 func (cb CertBundle) CommonNames() ([]string, error) {
 	if len(cb.Certificates) == 0 {
-		return nil, ex.New("no certificates returned")
+		return nil, exception.New("no certificates returned")
 	}
 	var output []string
 	for _, cert := range cb.Certificates {
-		if cert.Subject.CommonName != "" {
-			output = append(output, cert.Subject.CommonName)
-		}
+		output = append(output, cert.Subject.CommonName)
 	}
 	return output, nil
 }
@@ -159,7 +137,7 @@ func (cb CertBundle) CommonNames() ([]string, error) {
 func (cb CertBundle) CertPool() (*x509.CertPool, error) {
 	systemPool, err := x509.SystemCertPool()
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	for index := range cb.Certificates {
 		systemPool.AddCert(&cb.Certificates[index])

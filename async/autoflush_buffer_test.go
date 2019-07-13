@@ -1,46 +1,38 @@
 package async
 
 import (
-	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/graceful"
+	"go-sdk/assert"
+	"go-sdk/graceful"
 )
 
-// Assert AutoflushBuffer is graceful.
+// Assert a latch is graceful
 var (
 	_ graceful.Graceful = (*AutoflushBuffer)(nil)
 )
 
-func TestAutoflushBufferMaxLen(t *testing.T) {
+func TestAutoflushBuffer(t *testing.T) {
 	assert := assert.New(t)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-
-	var processed int32
-
-	afb := NewAutoflushBuffer(func(_ context.Context, objects []interface{}) error {
+	buffer := NewAutoflushBuffer(10, time.Hour).WithFlushHandler(func(objects []interface{}) {
 		defer wg.Done()
-		atomic.AddInt32(&processed, int32(len(objects)))
-		return nil
-	}, OptAutoflushBufferMaxLen(10), OptAutoflushBufferInterval(time.Hour))
+		assert.Len(objects, 10)
+	})
 
-	go afb.Start()
-	<-afb.NotifyStarted()
-	defer afb.Stop()
+	buffer.Start()
+	defer buffer.Stop()
 
 	for x := 0; x < 20; x++ {
-		afb.Add(fmt.Sprintf("foo%d", x))
+		buffer.Add(fmt.Sprintf("foo%d", x))
 	}
 
 	wg.Wait()
-	assert.Equal(20, processed)
 }
 
 func TestAutoflushBufferTicker(t *testing.T) {
@@ -50,15 +42,13 @@ func TestAutoflushBufferTicker(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(20)
-	buffer := NewAutoflushBuffer(func(_ context.Context, objects []interface{}) error {
+	buffer := NewAutoflushBuffer(100, time.Millisecond).WithFlushHandler(func(objects []interface{}) {
 		for range objects {
 			wg.Done()
 		}
-		return nil
-	}, OptAutoflushBufferMaxLen(100), OptAutoflushBufferInterval(time.Millisecond))
+	})
 
-	go buffer.Start()
-	<-buffer.NotifyStarted()
+	buffer.Start()
 	defer buffer.Stop()
 
 	for x := 0; x < 20; x++ {
@@ -68,15 +58,13 @@ func TestAutoflushBufferTicker(t *testing.T) {
 }
 
 func BenchmarkAutoflushBuffer(b *testing.B) {
-	buffer := NewAutoflushBuffer(func(_ context.Context, objects []interface{}) error {
+	buffer := NewAutoflushBuffer(128, 500*time.Millisecond).WithFlushHandler(func(objects []interface{}) {
 		if len(objects) > 128 {
 			b.Fail()
 		}
-		return nil
-	}, OptAutoflushBufferMaxLen(128), OptAutoflushBufferInterval(500*time.Millisecond))
+	})
 
-	go buffer.Start()
-	<-buffer.NotifyStarted()
+	buffer.Start()
 	defer buffer.Stop()
 
 	for x := 0; x < b.N; x++ {

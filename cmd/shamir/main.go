@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/blend/go-sdk/shamir"
-	"github.com/blend/go-sdk/stringutil"
+	"go-sdk/shamir"
+	"go-sdk/stringutil"
 	"github.com/spf13/cobra"
 )
 

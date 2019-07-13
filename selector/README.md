@@ -36,7 +36,7 @@ Fetch the package as normal:
 
 Include in your project:
 ```golang
-import selector "github.com/blend/go-sdk/selector"
+import selector "go-sdk/selector"
 ```
 
 ## Example
@@ -61,6 +61,6 @@ fmt.Println(selector.Matches(valid)) //prints `true`
 
 For most workloads `go-selector` is about 2x faster to compile and run versus the canonical kubernetes implementation.
 
-This is achieved primarily by escewing regular expressions and replacing them with state machine processing where possible. 
+This is achieved primarily by escewing regular expressions and replacing them with state machine processing where possible.
 
 An example benchmark can be found in `bench/main.go`.

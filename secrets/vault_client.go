@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -9,50 +10,69 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/blend/go-sdk/bufferutil"
-
 	"golang.org/x/net/http2"
 
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/exception"
+	"go-sdk/logger"
 )
 
-// assert VaultClient implements Client
-var (
-	_ Client = (*VaultClient)(nil)
-)
+// assert VaultClient implements client
+var _ Client = &VaultClient{}
 
-// New creates a new vault client with a default set of options.
-func New(options ...Option) (*VaultClient, error) {
+// NewVaultClient returns a new client.
+func NewVaultClient() (*VaultClient, error) {
+	return NewVaultClientFromConfig(&Config{})
+}
+
+// NewVaultClientFromConfig returns a new client from a config.
+func NewVaultClientFromConfig(cfg *Config) (*VaultClient, error) {
 	xport := &http.Transport{}
 	err := http2.ConfigureTransport(xport)
 	if err != nil {
 		return nil, err
 	}
-	remote, err := url.ParseRequestURI(DefaultAddr)
+	remote, err := url.ParseRequestURI(cfg.GetAddr())
 	if err != nil {
 		return nil, err
 	}
+	var certPool *CertPool
+	if caPaths := cfg.GetRootCAs(); len(caPaths) > 0 {
+		certPool, err = NewCertPool()
+		if err != nil {
+			return nil, err
+		}
+		err = certPool.AddPaths(caPaths...)
+		if err != nil {
+			return nil, err
+		}
+		xport.TLSClientConfig = &tls.Config{
+			RootCAs: certPool.Pool(),
+		}
+	}
 	client := &VaultClient{
-		Remote:     remote,
-		Mount:      DefaultMount,
-		BufferPool: bufferutil.NewPool(DefaultBufferPoolSize),
-		Client: &http.Client{
+		remote:     remote,
+		mount:      cfg.GetMount(),
+		bufferPool: NewBufferPool(DefaultBufferPoolSize),
+		token:      cfg.GetToken(),
+		certPool:   certPool,
+		client: &http.Client{
+			Timeout:   cfg.GetTimeout(),
 			Transport: xport,
 		},
 	}
 
-	client.KV1 = &KV1{Client: client}
-	client.KV2 = &KV2{Client: client}
-	client.Transit = &VaultTransit{Client: client}
-
-	for _, option := range options {
-		if err = option(client); err != nil {
-			return nil, err
-		}
-	}
-
+	client.kv1 = &KV1{Client: client}
+	client.kv2 = &KV2{Client: client}
 	return client, nil
+}
+
+// NewVaultClientFromEnv is a helper to create a client from a config read from the environment.
+func NewVaultClientFromEnv() (*VaultClient, error) {
+	cfg, err := NewConfigFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewVaultClientFromConfig(cfg)
 }
 
 // Must does things with the error such as panic.
@@ -65,21 +85,82 @@ func Must(c *VaultClient, err error) *VaultClient {
 
 // VaultClient is a client to talk to the secrets store.
 type VaultClient struct {
-	Remote     *url.URL
-	Token      string
-	Mount      string
-	Log        logger.Log
-	BufferPool *bufferutil.Pool
-	KV1        *KV1
-	KV2        *KV2
-	Transit    TransitClient
-	Client     HTTPClient
-	CertPool   *CertPool
+	remote *url.URL
+	token  string
+	mount  string
+	log    logger.Log
+
+	kv1 *KV1
+	kv2 *KV2
+
+	bufferPool *BufferPool
+	client     HTTPClient
+	certPool   *CertPool
+}
+
+// WithRemote set the client remote url.
+func (c *VaultClient) WithRemote(remote *url.URL) *VaultClient {
+	c.remote = remote
+	return c
+}
+
+// Remote returns the client remote addr.
+func (c *VaultClient) Remote() *url.URL {
+	return c.remote
+}
+
+// WithToken sets the token.
+func (c *VaultClient) WithToken(token string) *VaultClient {
+	c.token = token
+	return c
+}
+
+// Token returns the token.
+func (c *VaultClient) Token() string {
+	return c.token
+}
+
+// WithMount sets the token.
+func (c *VaultClient) WithMount(mount string) *VaultClient {
+	c.mount = mount
+	return c
+}
+
+// Mount returns the mount.
+func (c *VaultClient) Mount() string {
+	return c.mount
+}
+
+// WithHTTPClient sets the http client.
+func (c *VaultClient) WithHTTPClient(hc HTTPClient) *VaultClient {
+	c.client = hc
+	return c
+}
+
+// HTTPClient sets the http client.
+func (c *VaultClient) HTTPClient() HTTPClient {
+	return c.client
+}
+
+// CertPool returns the cert pool.
+func (c *VaultClient) CertPool() *CertPool {
+	return c.certPool
+}
+
+// WithLogger sets the logger.
+func (c *VaultClient) WithLogger(log logger.Log) *VaultClient {
+	c.log = log
+	return c
+}
+
+// Logger returns the logger.
+func (c *VaultClient) Logger() logger.Log {
+	return c.log
 }
 
 // Put puts a value.
-func (c *VaultClient) Put(ctx context.Context, key string, data Values, options ...RequestOption) error {
-	backend, err := c.backendKV(ctx, key)
+func (c *VaultClient) Put(ctx context.Context, key string, data Values, options ...Option) error {
+	backend, err := c.backend(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -88,8 +169,8 @@ func (c *VaultClient) Put(ctx context.Context, key string, data Values, options 
 }
 
 // Get gets a value at a given key.
-func (c *VaultClient) Get(ctx context.Context, key string, options ...RequestOption) (Values, error) {
-	backend, err := c.backendKV(ctx, key)
+func (c *VaultClient) Get(ctx context.Context, key string, options ...Option) (Values, error) {
+	backend, err := c.backend(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +179,8 @@ func (c *VaultClient) Get(ctx context.Context, key string, options ...RequestOpt
 }
 
 // Delete puts a key.
-func (c *VaultClient) Delete(ctx context.Context, key string, options ...RequestOption) error {
-	backend, err := c.backendKV(ctx, key)
+func (c *VaultClient) Delete(ctx context.Context, key string, options ...Option) error {
+	backend, err := c.backend(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -107,8 +188,8 @@ func (c *VaultClient) Delete(ctx context.Context, key string, options ...Request
 }
 
 // List returns a slice of key and subfolder names at this path.
-func (c *VaultClient) List(ctx context.Context, path string, options ...RequestOption) ([]string, error) {
-	backend, err := c.backendKV(ctx, path)
+func (c *VaultClient) List(ctx context.Context, path string, options ...Option) ([]string, error) {
+	backend, err := c.backend(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +198,7 @@ func (c *VaultClient) List(ctx context.Context, path string, options ...RequestO
 }
 
 // ReadInto reads a secret into an object.
-func (c *VaultClient) ReadInto(ctx context.Context, key string, obj interface{}, options ...RequestOption) error {
+func (c *VaultClient) ReadInto(ctx context.Context, key string, obj interface{}, options ...Option) error {
 	response, err := c.Get(ctx, key, options...)
 	if err != nil {
 		return err
@@ -126,7 +207,7 @@ func (c *VaultClient) ReadInto(ctx context.Context, key string, obj interface{},
 }
 
 // WriteInto writes an object into a secret at a given key.
-func (c *VaultClient) WriteInto(ctx context.Context, key string, obj interface{}, options ...RequestOption) error {
+func (c *VaultClient) WriteInto(ctx context.Context, key string, obj interface{}, options ...Option) error {
 	data, err := DecomposeJSON(obj)
 	if err != nil {
 		return err
@@ -134,57 +215,27 @@ func (c *VaultClient) WriteInto(ctx context.Context, key string, obj interface{}
 	return c.Put(ctx, key, data, options...)
 }
 
-// CreateTransitKey creates a transit key path
-func (c *VaultClient) CreateTransitKey(ctx context.Context, key string, params map[string]interface{}) error {
-	return c.Transit.CreateTransitKey(ctx, key, params)
-}
-
-// ConfigureTransitKey configures a transit key path
-func (c *VaultClient) ConfigureTransitKey(ctx context.Context, key string, config map[string]interface{}) error {
-	return c.Transit.ConfigureTransitKey(ctx, key, config)
-}
-
-// ReadTransitKey returns data about a transit key path
-func (c *VaultClient) ReadTransitKey(ctx context.Context, key string) (map[string]interface{}, error) {
-	return c.Transit.ReadTransitKey(ctx, key)
-}
-
-// DeleteTransitKey deletes a transit key path
-func (c *VaultClient) DeleteTransitKey(ctx context.Context, key string) error {
-	return c.Transit.DeleteTransitKey(ctx, key)
-}
-
-// Encrypt encrypts a given set of data.
-func (c *VaultClient) Encrypt(ctx context.Context, key string, context, data []byte) (string, error) {
-	return c.Transit.Encrypt(ctx, key, context, data)
-}
-
-// Decrypt decrypts a given set of data.
-func (c *VaultClient) Decrypt(ctx context.Context, key string, context []byte, ciphertext string) ([]byte, error) {
-	return c.Transit.Decrypt(ctx, key, context, ciphertext)
-}
-
 // --------------------------------------------------------------------------------
 // utility methods
 // --------------------------------------------------------------------------------
 
-func (c *VaultClient) backendKV(ctx context.Context, key string) (KV, error) {
+func (c *VaultClient) backend(ctx context.Context, key string) (KV, error) {
 	version, err := c.getVersion(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 	switch version {
 	case Version1:
-		return c.KV1, nil
+		return c.kv1, nil
 	case Version2:
-		return c.KV2, nil
+		return c.kv2, nil
 	default:
-		return c.KV1, nil
+		return c.kv1, nil
 	}
 }
 
 func (c *VaultClient) getVersion(ctx context.Context, key string) (string, error) {
-	meta, err := c.getMountMeta(ctx, filepath.Join(c.Mount, key))
+	meta, err := c.getMountMeta(ctx, filepath.Join(c.mount, key))
 	if err != nil {
 		return "", err
 	}
@@ -195,7 +246,7 @@ func (c *VaultClient) getMountMeta(ctx context.Context, key string) (*MountRespo
 	req := c.createRequest(MethodGet, filepath.Join("/v1/sys/internal/ui/mounts/", key))
 	req = req.WithContext(ctx)
 
-	res, err := c.Client.Do(req)
+	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +260,12 @@ func (c *VaultClient) getMountMeta(ctx context.Context, key string) (*MountRespo
 }
 
 func (c *VaultClient) jsonBody(input interface{}) (io.ReadCloser, error) {
-	buf := c.BufferPool.Get()
+	buf := c.bufferPool.Get()
 	err := json.NewEncoder(buf).Encode(input)
 	if err != nil {
 		return nil, err
 	}
-	return bufferutil.PutOnClose(buf, c.BufferPool), nil
+	return buf, nil
 }
 
 func (c *VaultClient) readJSON(r io.Reader, output interface{}) error {
@@ -223,25 +274,25 @@ func (c *VaultClient) readJSON(r io.Reader, output interface{}) error {
 
 // copyRemote returns a copy of our remote.
 func (c *VaultClient) copyRemote() *url.URL {
-	remoteCopy := *c.Remote
+	remoteCopy := *c.remote
 	return &remoteCopy
 }
 
 // applyOptions applies options to a request.
-func (c *VaultClient) applyOptions(req *http.Request, options ...RequestOption) {
+func (c *VaultClient) applyOptions(req *http.Request, options ...Option) {
 	for _, opt := range options {
 		opt(req)
 	}
 }
 
-func (c *VaultClient) createRequest(method, path string, options ...RequestOption) *http.Request {
+func (c *VaultClient) createRequest(method, path string, options ...Option) *http.Request {
 	remote := c.copyRemote()
 	remote.Path = path
 	req := &http.Request{
 		Method: method,
 		URL:    remote,
 		Header: http.Header{
-			HeaderVaultToken: []string{c.Token},
+			HeaderVaultToken: []string{c.Token()},
 		},
 	}
 	c.applyOptions(req, options...)
@@ -249,17 +300,18 @@ func (c *VaultClient) createRequest(method, path string, options ...RequestOptio
 }
 
 func (c *VaultClient) send(req *http.Request) (io.ReadCloser, error) {
-	logger.MaybeTrigger(req.Context(), c.Log, NewEvent(req))
-	res, err := c.Client.Do(req)
+	if c.log != nil {
+		c.log.Trigger(NewEvent(req))
+	}
+	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	if res.StatusCode > 299 {
-		buf := c.BufferPool.Get()
-		defer c.BufferPool.Put(buf)
-
+		buf := c.bufferPool.Get()
+		defer buf.Close()
 		io.Copy(buf, res.Body)
-		return nil, ex.New(ExceptionClassForStatus(res.StatusCode), ex.OptMessagef("status: %d; %v", res.StatusCode, buf.String()))
+		return nil, exception.New(ExceptionClassForStatus(res.StatusCode)).WithMessagef("status: %d; %v", res.StatusCode, buf.String())
 	}
 	return res.Body, nil
 }

@@ -3,7 +3,7 @@ package names
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestNames(t *testing.T) {

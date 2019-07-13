@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/assert"
+	"go-sdk/webutil"
 )
 
 func TestNestMiddleware(t *testing.T) {
@@ -178,31 +178,4 @@ func TestCSVValue(t *testing.T) {
 	value, err = CSVValue("foo,bar,baz", nil)
 	assert.Nil(err)
 	assert.Len(value, 3)
-}
-
-func TestBase64URL(t *testing.T) {
-	assert := assert.New(t)
-	bs := []byte("hello")
-	enc := Base64URLEncode(bs)
-	assert.NotEmpty(enc)
-
-	out, err := Base64URLDecode(enc)
-	assert.Nil(err)
-	assert.Equal(string(bs), string(out))
-}
-
-func TestParseInt32(t *testing.T) {
-	assert := assert.New(t)
-	i := ParseInt32("10")
-	assert.Equal(10, i)
-	i = ParseInt32("hbd")
-	assert.Equal(0, i)
-}
-
-func TestNewCookie(t *testing.T) {
-	assert := assert.New(t)
-	c := NewCookie("hello", "world")
-	assert.NotNil(c)
-	assert.Equal("hello", c.Name)
-	assert.Equal("world", c.Value)
 }

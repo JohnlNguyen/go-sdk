@@ -3,7 +3,7 @@ package slack
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestMessageOptions(t *testing.T) {

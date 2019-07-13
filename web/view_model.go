@@ -1,13 +1,12 @@
 package web
 
 import (
-	"github.com/blend/go-sdk/env"
+	"go-sdk/env"
 )
 
 // ViewModel is a wrapping viewmodel.
 type ViewModel struct {
 	Env       env.Vars
-	Status    ViewStatus
 	Ctx       *Ctx
 	ViewModel interface{}
 }

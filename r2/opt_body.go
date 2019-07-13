@@ -1,12 +1,11 @@
 package r2
 
-import (
-	"io"
-
-	"github.com/blend/go-sdk/webutil"
-)
+import "io"
 
 // OptBody sets the post body on the request.
 func OptBody(contents io.ReadCloser) Option {
-	return RequestOption(webutil.OptBody(contents))
+	return func(r *Request) error {
+		r.Body = contents
+		return nil
+	}
 }

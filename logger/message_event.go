@@ -1,80 +1,102 @@
 package logger
 
 import (
-	"context"
-	"encoding/json"
-	"io"
+	"bytes"
+	"fmt"
 	"time"
 )
 
 // these are compile time assertions
 var (
-	_ Event = (*MessageEvent)(nil)
+	_ Event            = &MessageEvent{}
+	_ EventHeadings    = &MessageEvent{}
+	_ EventLabels      = &MessageEvent{}
+	_ EventAnnotations = &MessageEvent{}
 )
 
-// NewMessageEvent returns a new message event.
-func NewMessageEvent(flag, message string, options ...MessageEventOption) *MessageEvent {
-	me := MessageEvent{
+// Messagef returns a new Message Event.
+func Messagef(flag Flag, format string, args ...interface{}) *MessageEvent {
+	return &MessageEvent{
 		EventMeta: NewEventMeta(flag),
-		Message:   message,
+		message:   fmt.Sprintf(format, args...),
 	}
-	for _, opt := range options {
-		opt(&me)
-	}
-	return &me
 }
 
 // NewMessageEventListener returns a new message event listener.
-func NewMessageEventListener(listener func(context.Context, *MessageEvent)) Listener {
-	return func(ctx context.Context, e Event) {
+func NewMessageEventListener(listener func(*MessageEvent)) Listener {
+	return func(e Event) {
 		if typed, isTyped := e.(*MessageEvent); isTyped {
-			listener(ctx, typed)
+			listener(typed)
 		}
 	}
-}
-
-// MessageEventOption mutates a message event.
-type MessageEventOption func(*MessageEvent)
-
-// OptMessageMeta sets meta options.
-func OptMessageMeta(options ...EventMetaOption) MessageEventOption {
-	return func(me *MessageEvent) {
-		for _, opt := range options {
-			opt(me.EventMeta)
-		}
-	}
-}
-
-// OptMessage sets a field on a message event.
-// Code style note; `OptMessageMessage` stutters, so it's been shortened.
-func OptMessage(message string) MessageEventOption {
-	return func(me *MessageEvent) { me.Message = message }
-}
-
-// OptMessageElapsed sets a field on a message event.
-func OptMessageElapsed(elapsed time.Duration) MessageEventOption {
-	return func(me *MessageEvent) { me.Elapsed = elapsed }
 }
 
 // MessageEvent is a common type of message.
 type MessageEvent struct {
-	*EventMeta `json:",inline"`
-	Message    string        `json:"message"`
-	Elapsed    time.Duration `json:"elapsed"`
+	*EventMeta
+	message string
+}
+
+// WithHeadings sets the headings.
+func (e *MessageEvent) WithHeadings(headings ...string) *MessageEvent {
+	e.headings = headings
+	return e
+}
+
+// WithLabel sets a label on the event for later filtering.
+func (e *MessageEvent) WithLabel(key, value string) *MessageEvent {
+	e.AddLabelValue(key, value)
+	return e
+}
+
+// WithAnnotation adds an annotation to the event.
+func (e *MessageEvent) WithAnnotation(key, value string) *MessageEvent {
+	e.AddAnnotationValue(key, value)
+	return e
+}
+
+// WithFlag sets the message flag.
+func (e *MessageEvent) WithFlag(flag Flag) *MessageEvent {
+	e.flag = flag
+	return e
+}
+
+// WithFlagTextColor sets the message flag text color.
+func (e *MessageEvent) WithFlagTextColor(color AnsiColor) *MessageEvent {
+	e.flagTextColor = color
+	return e
+}
+
+// WithTimestamp sets the message timestamp.
+func (e *MessageEvent) WithTimestamp(ts time.Time) *MessageEvent {
+	e.ts = ts
+	return e
+}
+
+// WithMessage sets the message.
+func (e *MessageEvent) WithMessage(message string) *MessageEvent {
+	e.message = message
+	return e
+}
+
+// Message returns the message.
+func (e *MessageEvent) Message() string {
+	return e.message
 }
 
 // WriteText implements TextWritable.
-func (e *MessageEvent) WriteText(formatter TextFormatter, output io.Writer) {
-	io.WriteString(output, e.Message)
-	if e.Elapsed > 0 {
-		io.WriteString(output, Space)
-		io.WriteString(output, "("+e.Elapsed.String()+")")
+func (e *MessageEvent) WriteText(formatter TextFormatter, buf *bytes.Buffer) {
+	buf.WriteString(e.message)
+}
+
+// WriteJSON implements JSONWriteable.
+func (e *MessageEvent) WriteJSON() JSONObj {
+	return JSONObj{
+		JSONFieldMessage: e.message,
 	}
 }
 
-// MarshalJSON implements json.Marshaler.
-func (e MessageEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(MergeDecomposed(e.EventMeta.Decompose(), map[string]interface{}{
-		"message": e.Message,
-	}))
+// String returns the message event body.
+func (e *MessageEvent) String() string {
+	return e.message
 }

@@ -1,8 +1,6 @@
 package db
 
-import (
-	"time"
-)
+import "time"
 
 const (
 	// DefaultEngine is the default database engine.
@@ -19,9 +17,6 @@ const (
 	// DefaultDatabase is the default database to connect to, we use
 	// `postgres` to not pollute the template databases.
 	DefaultDatabase = "postgres"
-
-	// DefaultSchema is the default schema to connect to
-	DefaultSchema = "public"
 
 	// SSLModeDisable is an ssl mode.
 	// Postgres Docs: "I don't care about security, and I don't want to pay the overhead of encryption."

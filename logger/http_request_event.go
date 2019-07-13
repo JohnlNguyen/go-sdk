@@ -1,97 +1,113 @@
 package logger
 
 import (
-	"context"
-	"encoding/json"
-	"io"
+	"bytes"
 	"net/http"
-
-	"github.com/blend/go-sdk/webutil"
+	"time"
 )
 
 // these are compile time assertions
 var (
-	_ Event          = (*HTTPRequestEvent)(nil)
-	_ TextWritable   = (*HTTPRequestEvent)(nil)
-	_ json.Marshaler = (*HTTPRequestEvent)(nil)
+	_ Event            = &HTTPRequestEvent{}
+	_ EventHeadings    = &HTTPRequestEvent{}
+	_ EventLabels      = &HTTPRequestEvent{}
+	_ EventAnnotations = &HTTPRequestEvent{}
 )
 
 // NewHTTPRequestEvent creates a new web request event.
-func NewHTTPRequestEvent(req *http.Request, options ...HTTPRequestEventOption) *HTTPRequestEvent {
-	hre := &HTTPRequestEvent{
+func NewHTTPRequestEvent(req *http.Request) *HTTPRequestEvent {
+	return &HTTPRequestEvent{
 		EventMeta: NewEventMeta(HTTPRequest),
-		Request:   req,
+		req:       req,
 	}
-	for _, option := range options {
-		option(hre)
-	}
-	return hre
 }
 
 // NewHTTPRequestEventListener returns a new web request event listener.
-func NewHTTPRequestEventListener(listener func(context.Context, *HTTPRequestEvent)) Listener {
-	return func(ctx context.Context, e Event) {
+func NewHTTPRequestEventListener(listener func(*HTTPRequestEvent)) Listener {
+	return func(e Event) {
 		if typed, isTyped := e.(*HTTPRequestEvent); isTyped {
-			listener(ctx, typed)
+			listener(typed)
 		}
-	}
-}
-
-// HTTPRequestEventOption sets a field on an HTTPRequestEventOption.
-type HTTPRequestEventOption func(*HTTPRequestEvent)
-
-// OptHTTPRequestMeta sets a field on an HTTPRequestEvent.
-func OptHTTPRequestMeta(options ...EventMetaOption) HTTPRequestEventOption {
-	return func(hre *HTTPRequestEvent) {
-		for _, option := range options {
-			option(hre.EventMeta)
-		}
-	}
-}
-
-// OptHTTPRequest sets a field on an HTTPRequestEvent.
-func OptHTTPRequest(req *http.Request) HTTPRequestEventOption {
-	return func(hre *HTTPRequestEvent) {
-		hre.Request = req
-	}
-}
-
-// OptHTTPRequestRoute sets a field on an HTTPRequestEvent.
-func OptHTTPRequestRoute(route string) HTTPRequestEventOption {
-	return func(hre *HTTPRequestEvent) {
-		hre.Route = route
-	}
-}
-
-// OptHTTPRequestState sets a field on an HTTPRequestEvent.
-func OptHTTPRequestState(state interface{}) HTTPRequestEventOption {
-	return func(hre *HTTPRequestEvent) {
-		hre.State = state
 	}
 }
 
 // HTTPRequestEvent is an event type for http responses.
 type HTTPRequestEvent struct {
 	*EventMeta
-	Request *http.Request
-	Route   string
-	State   interface{}
+	req   *http.Request
+	route string
+	state map[interface{}]interface{}
+}
+
+// WithHeadings sets the headings.
+func (e *HTTPRequestEvent) WithHeadings(headings ...string) *HTTPRequestEvent {
+	e.headings = headings
+	return e
+}
+
+// WithLabel sets a label on the event for later filtering.
+func (e *HTTPRequestEvent) WithLabel(key, value string) *HTTPRequestEvent {
+	e.AddLabelValue(key, value)
+	return e
+}
+
+// WithAnnotation adds an annotation to the event.
+func (e *HTTPRequestEvent) WithAnnotation(key, value string) *HTTPRequestEvent {
+	e.AddAnnotationValue(key, value)
+	return e
+}
+
+// WithFlag sets the event flag.
+func (e *HTTPRequestEvent) WithFlag(flag Flag) *HTTPRequestEvent {
+	e.flag = flag
+	return e
+}
+
+// WithTimestamp sets the timestamp.
+func (e *HTTPRequestEvent) WithTimestamp(ts time.Time) *HTTPRequestEvent {
+	e.ts = ts
+	return e
+}
+
+// WithRequest sets the request metadata.
+func (e *HTTPRequestEvent) WithRequest(req *http.Request) *HTTPRequestEvent {
+	e.req = req
+	return e
+}
+
+// Request returns the request metadata.
+func (e *HTTPRequestEvent) Request() *http.Request {
+	return e.req
+}
+
+// WithRoute sets the mux route.
+func (e *HTTPRequestEvent) WithRoute(route string) *HTTPRequestEvent {
+	e.route = route
+	return e
+}
+
+// Route is the mux route of the request.
+func (e *HTTPRequestEvent) Route() string {
+	return e.route
+}
+
+// WithState sets the request state.
+func (e *HTTPRequestEvent) WithState(state map[interface{}]interface{}) *HTTPRequestEvent {
+	e.state = state
+	return e
+}
+
+// State returns the state of the request.
+func (e *HTTPRequestEvent) State() map[interface{}]interface{} {
+	return e.state
 }
 
 // WriteText implements TextWritable.
-func (e *HTTPRequestEvent) WriteText(formatter TextFormatter, wr io.Writer) {
-	WriteHTTPRequest(formatter, wr, e.Request)
+func (e *HTTPRequestEvent) WriteText(formatter TextFormatter, buf *bytes.Buffer) {
+	TextWriteHTTPRequest(formatter, buf, e.req)
 }
 
-// MarshalJSON marshals the event as json.
-func (e *HTTPRequestEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(MergeDecomposed(e.EventMeta.Decompose(), map[string]interface{}{
-		"verb":      e.Request.Method,
-		"path":      e.Request.URL.Path,
-		"host":      e.Request.Host,
-		"route":     e.Route,
-		"ip":        webutil.GetRemoteAddr(e.Request),
-		"userAgent": webutil.GetUserAgent(e.Request),
-		"state":     e.State,
-	}))
+// WriteJSON implements JSONWritable.
+func (e *HTTPRequestEvent) WriteJSON() JSONObj {
+	return JSONWriteHTTPRequest(e.req)
 }

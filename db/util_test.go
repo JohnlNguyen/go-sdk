@@ -3,15 +3,15 @@ package db
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestMakeCsvTokens(t *testing.T) {
 	a := assert.New(t)
 
-	one := ParamTokensCSV(1)
-	two := ParamTokensCSV(2)
-	three := ParamTokensCSV(3)
+	one := paramTokensCSV(1)
+	two := paramTokensCSV(2)
+	three := paramTokensCSV(3)
 
 	a.Equal("$1", one)
 	a.Equal("$1,$2", two)
@@ -25,13 +25,13 @@ func TestReflectSliceType(t *testing.T) {
 		{}, {}, {},
 	}
 
-	ot := ReflectSliceType(objects)
+	ot := reflectSliceType(objects)
 	assert.Equal("benchObj", ot.Name())
 }
 
 func TestMakeSliceOfType(t *testing.T) {
 	a := assert.New(t)
-	tx, txErr := defaultDB().Begin()
+	tx, txErr := Default().Begin()
 	a.Nil(txErr)
 	defer func() {
 		a.Nil(tx.Rollback())
@@ -40,11 +40,11 @@ func TestMakeSliceOfType(t *testing.T) {
 	seedErr := seedObjects(10, tx)
 	a.Nil(seedErr)
 
-	myType := ReflectType(benchObj{})
+	myType := reflectType(benchObj{})
 	sliceOfT, castOk := makeSliceOfType(myType).(*[]benchObj)
 	a.True(castOk)
 
-	allErr := defaultDB().Invoke(OptTx(tx)).All(sliceOfT)
+	allErr := Default().GetAllInTx(sliceOfT, tx)
 	a.Nil(allErr)
 	a.NotEmpty(*sliceOfT)
 }

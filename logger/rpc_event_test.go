@@ -2,60 +2,81 @@ package logger
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
-
-func TestRPCEvent(t *testing.T) {
-	assert := assert.New(t)
-
-	re := NewRPCEvent("/v1.foo", time.Second,
-		OptRPCAuthority("event-authority"),
-		OptRPCContentType("event-content-type"),
-		OptRPCElapsed(time.Millisecond),
-		OptRPCEngine("event-engine"),
-		OptRPCErr(fmt.Errorf("test error")),
-		OptRPCMethod("/v1.bar"),
-		OptRPCPeer("event-peer"),
-		OptRPCUserAgent("event-user-agent"),
-	)
-
-	assert.Equal("event-authority", re.Authority)
-	assert.Equal("event-content-type", re.ContentType)
-	assert.Equal(time.Millisecond, re.Elapsed)
-	assert.Equal("event-engine", re.Engine)
-	assert.Equal(fmt.Errorf("test error"), re.Err)
-	assert.Equal("/v1.bar", re.Method)
-	assert.Equal("event-peer", re.Peer)
-	assert.Equal("event-user-agent", re.UserAgent)
-
-	buf := new(bytes.Buffer)
-	noColor := TextOutputFormatter{
-		NoColor: true,
-	}
-
-	re.WriteText(noColor, buf)
-	assert.Equal("[event-engine] /v1.bar event-peer event-authority event-user-agent event-content-type 1ms failed", buf.String())
-
-	contents, err := json.Marshal(re)
-	assert.Nil(err)
-	assert.Contains(string(contents), "event-engine")
-}
 
 func TestRPCEventListener(t *testing.T) {
 	assert := assert.New(t)
 
-	re := NewRPCEvent("/v1.foo", time.Second)
+	wg := sync.WaitGroup{}
+	wg.Add(4)
 
-	var didCall bool
-	ml := NewRPCEventListener(func(ctx context.Context, e *RPCEvent) {
-		didCall = true
-	})
-	ml(context.Background(), re)
-	assert.True(didCall)
+	textBuffer := bytes.NewBuffer(nil)
+	jsonBuffer := bytes.NewBuffer(nil)
+	all := New().WithFlags(AllFlags()).WithRecoverPanics(false).
+		WithWriter(NewTextWriter(textBuffer)).
+		WithWriter(NewJSONWriter(jsonBuffer))
+	defer all.Close()
+
+	all.Listen(RPC, "default", NewRPCEventListener(func(re *RPCEvent) {
+		defer wg.Done()
+		assert.Equal(RPC, re.Flag())
+		assert.Equal("/test", re.Method())
+		assert.NotZero(re.Elapsed())
+	}))
+
+	go func() {
+		defer wg.Done()
+		all.Trigger(NewRPCEvent("/test", time.Millisecond))
+	}()
+	go func() {
+		defer wg.Done()
+		all.Trigger(NewRPCEvent("/test", time.Millisecond))
+	}()
+	wg.Wait()
+	all.Drain()
+
+	assert.NotEmpty(textBuffer.String())
+	assert.NotEmpty(jsonBuffer.String())
+}
+
+func TestRPCEventProperties(t *testing.T) {
+	assert := assert.New(t)
+
+	e := NewRPCEvent("", 0)
+
+	assert.False(e.Timestamp().IsZero())
+	assert.True(e.WithTimestamp(time.Time{}).Timestamp().IsZero())
+
+	assert.Empty(e.Labels())
+	assert.Equal("bar", e.WithLabel("foo", "bar").Labels()["foo"])
+
+	assert.Empty(e.Annotations())
+	assert.Equal("zar", e.WithAnnotation("moo", "zar").Annotations()["moo"])
+
+	assert.Equal(RPC, e.Flag())
+	assert.Equal(Error, e.WithFlag(Error).Flag())
+
+	assert.Empty(e.Headings())
+	assert.Equal([]string{"Heading"}, e.WithHeadings("Heading").Headings())
+
+	assert.Empty(e.Engine())
+	assert.Equal("grpc", e.WithEngine("grpc").Engine())
+
+	assert.Empty(e.Method())
+	assert.Equal("/test", e.WithMethod("/test").Method())
+
+	assert.Zero(e.Elapsed())
+	assert.Equal(time.Millisecond, e.WithElapsed(time.Millisecond).Elapsed())
+
+	assert.Empty(e.ContentType())
+	assert.Equal("content-type", e.WithContentType("content-type").ContentType())
+
+	assert.Empty(e.Authority())
+	assert.Equal("authority", e.WithAuthority("authority").Authority())
+
 }

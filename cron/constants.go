@@ -2,6 +2,8 @@ package cron
 
 import (
 	"time"
+
+	"go-sdk/logger"
 )
 
 const (
@@ -11,8 +13,8 @@ const (
 
 // Retention defaults
 const (
-	DefaultHistoryMaxCount = 10
-	DefaultHistoryMaxAge   = 6 * time.Hour
+	DefaultMaxCount = 10
+	DefaultMaxAge   = 6 * time.Hour
 )
 
 const (
@@ -33,21 +35,21 @@ const (
 
 const (
 	// FlagStarted is an event flag.
-	FlagStarted = "cron.started"
+	FlagStarted logger.Flag = "cron.started"
 	// FlagFailed is an event flag.
-	FlagFailed = "cron.failed"
+	FlagFailed logger.Flag = "cron.failed"
 	// FlagCancelled is an event flag.
-	FlagCancelled = "cron.cancelled"
+	FlagCancelled logger.Flag = "cron.cancelled"
 	// FlagComplete is an event flag.
-	FlagComplete = "cron.complete"
+	FlagComplete logger.Flag = "cron.complete"
 	// FlagBroken is an event flag.
-	FlagBroken = "cron.broken"
+	FlagBroken logger.Flag = "cron.broken"
 	// FlagFixed is an event flag.
-	FlagFixed = "cron.fixed"
+	FlagFixed logger.Flag = "cron.fixed"
 	// FlagEnabled is an event flag.
-	FlagEnabled = "cron.enabled"
+	FlagEnabled logger.Flag = "cron.enabled"
 	// FlagDisabled is an event flag.
-	FlagDisabled = "cron.disabled"
+	FlagDisabled logger.Flag = "cron.disabled"
 )
 
 // State is a job state.

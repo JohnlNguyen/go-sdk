@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestWorker(t *testing.T) {
@@ -20,14 +20,12 @@ func TestWorker(t *testing.T) {
 		assert.Equal("hello", obj)
 		return nil
 	})
-	go w.Start()
-	<-w.NotifyStarted()
 
-	assert.True(w.IsStarted())
+	w.Start()
+	assert.True(w.Latch().IsRunning())
 	w.Enqueue("hello")
 	wg.Wait()
 	w.Close()
-
-	assert.False(w.IsStarted())
+	assert.False(w.Latch().IsRunning())
 	assert.True(didWork)
 }

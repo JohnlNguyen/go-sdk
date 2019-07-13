@@ -2,100 +2,121 @@ package logger
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
-	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
+	assert "go-sdk/assert"
 )
-
-func TestAuditEventMarshalJSON(t *testing.T) {
-	assert := assert.New(t)
-
-	ae := NewAuditEvent(
-		"bailey",
-		"pooped",
-		OptAuditMetaOptions(OptEventMetaTimestamp(time.Date(2016, 01, 02, 03, 04, 05, 06, time.UTC))),
-	)
-
-	contents, err := json.Marshal(ae)
-	assert.Nil(err)
-
-	assert.Contains(string(contents), "bailey")
-	assert.Contains(string(contents), "pooped")
-
-	assert.True(strings.HasPrefix(string(contents), `{"_timestamp":"2016-01-02T03:04:05`), string(contents))
-}
-
-func TestAuditEventOptions(t *testing.T) {
-	assert := assert.New(t)
-
-	ae := NewAuditEvent(
-		"bailey",
-		"pooped",
-		OptAuditMetaOptions(OptEventMetaTimestamp(time.Date(2016, 01, 02, 03, 04, 05, 06, time.UTC))),
-		OptAuditContext("event context"),
-		OptAuditPrincipal("not bailey"),
-		OptAuditVerb("not pooped"),
-		OptAuditNoun("audit noun"),
-		OptAuditSubject("audit subject"),
-		OptAuditProperty("audit property"),
-		OptAuditRemoteAddress("remote address"),
-		OptAuditUserAgent("user agent"),
-		OptAuditExtra(map[string]string{"foo": "bar"}),
-	)
-
-	assert.Equal("event context", ae.Context)
-	assert.Equal("not bailey", ae.Principal)
-	assert.Equal("not pooped", ae.Verb)
-	assert.Equal("audit noun", ae.Noun)
-	assert.Equal("audit subject", ae.Subject)
-	assert.Equal("audit property", ae.Property)
-	assert.Equal("remote address", ae.RemoteAddress)
-	assert.Equal("user agent", ae.UserAgent)
-	assert.Equal("bar", ae.Extra["foo"])
-}
-
-func TestAuditEventWriteText(t *testing.T) {
-	assert := assert.New(t)
-
-	ae := NewAuditEvent(
-		"bailey",
-		"pooped",
-		OptAuditMetaOptions(OptEventMetaTimestamp(time.Date(2016, 01, 02, 03, 04, 05, 06, time.UTC))),
-		OptAuditContext("event context"),
-		OptAuditPrincipal("not bailey"),
-		OptAuditVerb("not pooped"),
-		OptAuditNoun("audit noun"),
-		OptAuditSubject("audit subject"),
-		OptAuditProperty("audit property"),
-		OptAuditRemoteAddress("remote address"),
-		OptAuditUserAgent("user agent"),
-		OptAuditExtra(map[string]string{"foo": "bar"}),
-	)
-
-	buf := new(bytes.Buffer)
-	noColor := TextOutputFormatter{
-		NoColor: true,
-	}
-
-	ae.WriteText(noColor, buf)
-
-	assert.Equal("Context:event context Principal:not bailey Verb:not pooped Noun:audit noun Subject:audit subject Property:audit property Remote Addr:remote address UA:user agent foo:bar", buf.String())
-}
 
 func TestAuditEventListener(t *testing.T) {
 	assert := assert.New(t)
 
-	ae := NewAuditEvent("bailey", "pooped")
+	wg := sync.WaitGroup{}
+	wg.Add(4)
 
-	var didCall bool
-	ml := NewAuditEventListener(func(ctx context.Context, ae *AuditEvent) {
-		didCall = true
-	})
+	textBuffer := bytes.NewBuffer(nil)
+	jsonBuffer := bytes.NewBuffer(nil)
+	all := New().WithFlags(AllFlags()).
+		WithRecoverPanics(false).
+		WithWriter(NewTextWriter(textBuffer)).
+		WithWriter(NewJSONWriter(jsonBuffer))
+	defer all.Close()
 
-	ml(context.Background(), ae)
-	assert.True(didCall)
+	all.Listen(Audit, "default", NewAuditEventListener(func(e *AuditEvent) {
+		defer wg.Done()
+
+		assert.Equal(Audit, e.Flag())
+		assert.Equal("principal", e.Principal())
+		assert.Equal("verb", e.Verb())
+	}))
+
+	go func() {
+		defer wg.Done()
+		all.Trigger(NewAuditEvent("principal", "verb").
+			WithNoun("noun").
+			WithSubject("subject").
+			WithProperty("property").
+			WithUserAgent("user-agent").
+			WithRemoteAddress("remote-address").
+			WithExtra(map[string]string{"foo": "bar"}))
+	}()
+	go func() {
+		defer wg.Done()
+		all.Trigger(NewAuditEvent("principal", "verb").
+			WithNoun("noun").
+			WithSubject("subject").
+			WithProperty("property").
+			WithUserAgent("user-agent").
+			WithRemoteAddress("remote-address").
+			WithExtra(map[string]string{"foo": "bar"}))
+	}()
+	wg.Wait()
+	all.Drain()
+
+	assert.NotEmpty(textBuffer.String())
+	assert.NotEmpty(jsonBuffer.String())
+}
+
+func TestAuditEventInterfaces(t *testing.T) {
+	assert := assert.New(t)
+
+	ae := NewAuditEvent("principal", "verb").WithNoun("noun").WithHeadings("heading").WithLabel("foo", "bar")
+
+	eventProvider, isEvent := MarshalEvent(ae)
+	assert.True(isEvent)
+	assert.Equal(Audit, eventProvider.Flag())
+	assert.False(eventProvider.Timestamp().IsZero())
+
+	headingProvider, isHeadingProvider := MarshalEventHeadings(ae)
+	assert.True(isHeadingProvider)
+	assert.Equal([]string{"heading"}, headingProvider.Headings())
+
+	metaProvider, isMetaProvider := MarshalEventMetaProvider(ae)
+	assert.True(isMetaProvider)
+	assert.Equal("bar", metaProvider.Labels()["foo"])
+}
+
+func TestAuditEventProperties(t *testing.T) {
+	assert := assert.New(t)
+
+	ae := NewAuditEvent("", "")
+	assert.False(ae.Timestamp().IsZero())
+	assert.True(ae.WithTimestamp(time.Time{}).Timestamp().IsZero())
+
+	assert.Equal(Audit, ae.Flag())
+	assert.Equal(Fatal, ae.WithFlag(Fatal).Flag())
+
+	assert.Empty(ae.Principal())
+	assert.Equal("Principal", ae.WithPrincipal("Principal").Principal())
+
+	assert.Empty(ae.Verb())
+	assert.Equal("Verb", ae.WithVerb("Verb").Verb())
+
+	assert.Empty(ae.Noun())
+	assert.Equal("Noun", ae.WithNoun("Noun").Noun())
+
+	assert.Empty(ae.Headings())
+	assert.Equal([]string{"Heading"}, ae.WithHeadings("Heading").Headings())
+
+	assert.Empty(ae.Subject())
+	assert.Equal("Subject", ae.WithSubject("Subject").Subject())
+
+	assert.Empty(ae.Property())
+	assert.Equal("Property", ae.WithProperty("Property").Property())
+
+	assert.Empty(ae.RemoteAddress())
+	assert.Equal("RemoteAddress", ae.WithRemoteAddress("RemoteAddress").RemoteAddress())
+
+	assert.Empty(ae.UserAgent())
+	assert.Equal("UserAgent", ae.WithUserAgent("UserAgent").UserAgent())
+
+	assert.Empty(ae.Labels())
+	assert.Equal("bar", ae.WithLabel("foo", "bar").Labels()["foo"])
+
+	assert.Empty(ae.Annotations())
+	assert.Equal("zar", ae.WithAnnotation("moo", "zar").Annotations()["moo"])
+
+	assert.Empty(ae.Extra())
+	assert.Equal("buzz", ae.WithExtra(map[string]string{"wuzz": "buzz"}).Extra()["wuzz"])
 }

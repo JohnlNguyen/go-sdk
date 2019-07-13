@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -19,7 +19,7 @@ func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, operat
 }
 
 // GetTracingSpanFromContext returns a tracing span from a given context.
-func GetTracingSpanFromContext(ctx context.Context, key interface{}) opentracing.Span {
+func GetTracingSpanFromContext(ctx context.Context, key string) opentracing.Span {
 	if typed, ok := ctx.Value(key).(opentracing.Span); ok {
 		return typed
 	}
@@ -29,10 +29,10 @@ func GetTracingSpanFromContext(ctx context.Context, key interface{}) opentracing
 // SpanError injects error metadata into a span.
 func SpanError(span opentracing.Span, err error) {
 	if err != nil {
-		if typed := ex.As(err); typed != nil {
-			span.SetTag(TagKeyError, typed.Class)
-			span.SetTag(TagKeyErrorMessage, typed.Message)
-			span.SetTag(TagKeyErrorStack, typed.Stack.String())
+		if typed := exception.As(err); typed != nil {
+			span.SetTag(TagKeyError, typed.Class())
+			span.SetTag(TagKeyErrorMessage, typed.Message())
+			span.SetTag(TagKeyErrorStack, typed.Stack().String())
 		} else {
 			span.SetTag(TagKeyError, fmt.Sprintf("%v", err))
 		}

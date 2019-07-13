@@ -1,6 +1,6 @@
 package db
 
 import (
-	// The driver we use by default is lib/pq.
+	// lib/pq is the default driver for go-sdk/db
 	_ "github.com/lib/pq"
 )

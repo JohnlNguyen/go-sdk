@@ -3,8 +3,8 @@ package selector
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/assert"
+	"go-sdk/exception"
 )
 
 func TestMustParse(t *testing.T) {
@@ -14,11 +14,11 @@ func TestMustParse(t *testing.T) {
 
 	var err error
 	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = ex.New(r)
-			}
-		}()
+	defer func() {
+		if r := recover(); r != nil {
+			err = exception.New(r)
+		}
+	}()
 		MustParse("x!!")
 	}()
 	assert.NotNil(err)

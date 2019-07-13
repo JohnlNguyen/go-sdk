@@ -3,9 +3,8 @@ package datadog
 import (
 	"fmt"
 
-	"github.com/blend/go-sdk/configutil"
-
-	"github.com/blend/go-sdk/env"
+	"go-sdk/configutil"
+	"go-sdk/env"
 )
 
 const (
@@ -13,9 +12,23 @@ const (
 	DefaultDatadogBufferDepth = 128
 )
 
-var (
-	_ configutil.ConfigResolver = (*Config)(nil)
-)
+// MustNewConfigFromEnv creates a new config from the environment and panics on error.
+func MustNewConfigFromEnv() (config *Config) {
+	var err error
+	if config, err = NewConfigFromEnv(); err != nil {
+		panic(err)
+	}
+	return
+}
+
+// NewConfigFromEnv returns a new config from the env.
+func NewConfigFromEnv() (*Config, error) {
+	var config Config
+	if err := env.Env().ReadInto(&config); err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
 
 // Config is the datadog config.
 type Config struct {
@@ -35,65 +48,60 @@ type Config struct {
 	// Namespace is an optional namespace.
 	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty" env:"DATADOG_NAMESPACE"`
 	// DefaultTags are the default tags associated with any stat metric.
-	DefaultTags []string `json:"defaultTags,omitempty" yaml:"defaultTags,omitempty" env:"DATADOG_DEFAULT_TAGS,csv"`
-}
-
-// Resolve implements configutil.ConfigResolver.
-func (c *Config) Resolve() error {
-	return env.Env().ReadInto(c)
+	DefaultTags []string `json:"defaultTags,omitempty" yaml:"defaultTags,omitempty" env:"DATADOG_TAGS,csv"`
 }
 
 // IsZero returns if the config is unset.
 func (c Config) IsZero() bool {
-	return len(c.Hostname) == 0
+	return len(c.GetHostname()) == 0
 }
 
-// PortOrDefault returns the datadog port.
-func (c Config) PortOrDefault() string {
-	if c.Port != "" {
-		return c.Port
-	}
-	return DefaultPort
+// GetHostname returns the datadog hostname.
+func (c Config) GetHostname(defaults ...string) string {
+	return configutil.CoalesceString(c.Hostname, "", defaults...)
 }
 
-// TracePortOrDefault returns the datadog trace port.
-func (c Config) TracePortOrDefault(defaults ...string) string {
-	if c.TracePort != "" {
-		return c.TracePort
-	}
-	return DefaultTracePort
+// GetPort returns the datadog port.
+func (c Config) GetPort(defaults ...string) string {
+	return configutil.CoalesceString(c.Port, DefaultPort, defaults...)
 }
 
-// TracingEnabledOrDefault returns if tracing is enabled.
-func (c Config) TracingEnabledOrDefault() bool {
-	if c.TracingEnabled != nil {
-		return *c.TracingEnabled
-	}
-	return DefaultTracingEnabled
+// GetTracePort returns the datadog trace port.
+func (c Config) GetTracePort(defaults ...string) string {
+	return configutil.CoalesceString(c.TracePort, DefaultTracePort, defaults...)
+}
+
+// GetTracingEnabled returns if tracing is enabled.
+func (c Config) GetTracingEnabled() bool {
+	return configutil.CoalesceBool(c.TracingEnabled, DefaultTracingEnabled)
 }
 
 // GetHost returns the datadog collector host:port string.
 func (c Config) GetHost() string {
-	return fmt.Sprintf("%s:%s", c.Hostname, c.PortOrDefault())
+	return fmt.Sprintf("%s:%s", c.GetHostname(), c.GetPort())
 }
 
 // GetTraceHost returns the datadog trace collector host:port string.
 func (c Config) GetTraceHost() string {
-	return fmt.Sprintf("%s:%s", c.Hostname, c.TracePortOrDefault())
+	return fmt.Sprintf("%s:%s", c.GetHostname(), c.GetTracePort())
 }
 
-// BufferedOrDefault returns if the client should buffer messages or not.
-func (c Config) BufferedOrDefault() bool {
-	if c.Buffered != nil {
-		return *c.Buffered
-	}
-	return false
+// GetBuffered returns if the client should buffer messages or not.
+func (c Config) GetBuffered(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.Buffered, false, defaults...)
 }
 
-// BufferDepthOrDefault returns the buffer depth.
-func (c Config) BufferDepthOrDefault() int {
-	if c.BufferDepth > 0 {
-		return c.BufferDepth
-	}
-	return DefaultDatadogBufferDepth
+// GetBufferDepth returns the buffer depth.
+func (c Config) GetBufferDepth(defaults ...int) int {
+	return configutil.CoalesceInt(c.BufferDepth, DefaultDatadogBufferDepth, defaults...)
+}
+
+// GetNamespace returns the default prefix for metric names.
+func (c Config) GetNamespace(defaults ...string) string {
+	return configutil.CoalesceString(c.Namespace, "", defaults...)
+}
+
+// GetDefaultTags returns default tags for the client.
+func (c Config) GetDefaultTags(defaults ...[]string) []string {
+	return configutil.CoalesceStrings(c.DefaultTags, nil, defaults...)
 }

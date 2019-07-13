@@ -3,7 +3,7 @@ package async
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 // TestMain is the testing entrypoint.

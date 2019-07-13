@@ -1,148 +1,217 @@
 package logger
 
 import (
-	"context"
-	"encoding/json"
-	"io"
+	"bytes"
 	"time"
-
-	"github.com/blend/go-sdk/ansi"
-	"github.com/blend/go-sdk/timeutil"
 )
 
 // these are compile time assertions
 var (
-	_ Event = (*RPCEvent)(nil)
+	_ Event            = &RPCEvent{}
+	_ EventHeadings    = &RPCEvent{}
+	_ EventLabels      = &RPCEvent{}
+	_ EventAnnotations = &RPCEvent{}
 )
 
 // NewRPCEvent creates a new rpc event.
-func NewRPCEvent(method string, elapsed time.Duration, options ...RPCEventOption) *RPCEvent {
-	rpe := RPCEvent{
+func NewRPCEvent(method string, elapsed time.Duration) *RPCEvent {
+	return &RPCEvent{
 		EventMeta: NewEventMeta(RPC),
-		Method:    method,
-		Elapsed:   elapsed,
+		method:    method,
+		elapsed:   elapsed,
 	}
-	for _, opt := range options {
-		opt(&rpe)
-	}
-	return &rpe
 }
 
 // NewRPCEventListener returns a new web request event listener.
-func NewRPCEventListener(listener func(context.Context, *RPCEvent)) Listener {
-	return func(ctx context.Context, e Event) {
+func NewRPCEventListener(listener func(*RPCEvent)) Listener {
+	return func(e Event) {
 		if typed, isTyped := e.(*RPCEvent); isTyped {
-			listener(ctx, typed)
+			listener(typed)
 		}
 	}
-}
-
-// RPCEventOption is a mutator for RPCEvents.
-type RPCEventOption func(*RPCEvent)
-
-// OptRPCEngine sets a field on the event.
-func OptRPCEngine(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.Engine = value }
-}
-
-// OptRPCPeer sets a field on the event.
-func OptRPCPeer(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.Peer = value }
-}
-
-// OptRPCMethod sets a field on the event.
-func OptRPCMethod(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.Method = value }
-}
-
-// OptRPCUserAgent sets a field on the event.
-func OptRPCUserAgent(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.UserAgent = value }
-}
-
-// OptRPCAuthority sets a field on the event.
-func OptRPCAuthority(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.Authority = value }
-}
-
-// OptRPCContentType sets a field on the event.
-func OptRPCContentType(value string) RPCEventOption {
-	return func(e *RPCEvent) { e.ContentType = value }
-}
-
-// OptRPCElapsed sets a field on the event.
-func OptRPCElapsed(value time.Duration) RPCEventOption {
-	return func(e *RPCEvent) { e.Elapsed = value }
-}
-
-// OptRPCErr sets a field on the event.
-func OptRPCErr(value error) RPCEventOption {
-	return func(e *RPCEvent) { e.Err = value }
 }
 
 // RPCEvent is an event type for rpc
 type RPCEvent struct {
 	*EventMeta
-	Engine      string
-	Peer        string
-	Method      string
-	UserAgent   string
-	Authority   string
-	ContentType string
-	Elapsed     time.Duration
-	Err         error
+	engine      string
+	peer        string
+	method      string
+	userAgent   string
+	authority   string
+	contentType string
+	elapsed     time.Duration
+	err         error
+}
+
+// WithHeadings sets the headings.
+func (e *RPCEvent) WithHeadings(headings ...string) *RPCEvent {
+	e.headings = headings
+	return e
+}
+
+// WithLabel sets a label on the event for later filtering.
+func (e *RPCEvent) WithLabel(key, value string) *RPCEvent {
+	e.AddLabelValue(key, value)
+	return e
+}
+
+// WithAnnotation adds an annotation to the event.
+func (e *RPCEvent) WithAnnotation(key, value string) *RPCEvent {
+	e.AddAnnotationValue(key, value)
+	return e
+}
+
+// WithFlag sets the event flag.
+func (e *RPCEvent) WithFlag(flag Flag) *RPCEvent {
+	e.flag = flag
+	return e
+}
+
+// WithTimestamp sets the timestamp.
+func (e *RPCEvent) WithTimestamp(ts time.Time) *RPCEvent {
+	e.ts = ts
+	return e
+}
+
+// WithEngine sets the engine.
+func (e *RPCEvent) WithEngine(engine string) *RPCEvent {
+	e.engine = engine
+	return e
+}
+
+// Engine returns the engine.
+func (e RPCEvent) Engine() string {
+	return e.engine
+}
+
+// WithPeer sets the peer.
+func (e *RPCEvent) WithPeer(peer string) *RPCEvent {
+	e.peer = peer
+	return e
+}
+
+// Peer returns the peer.
+func (e RPCEvent) Peer() string {
+	return e.peer
+}
+
+// WithMethod sets the method.
+func (e *RPCEvent) WithMethod(method string) *RPCEvent {
+	e.method = method
+	return e
+}
+
+// Method returns the method.
+func (e RPCEvent) Method() string {
+	return e.method
+}
+
+// WithAuthority sets the authority.
+func (e *RPCEvent) WithAuthority(authority string) *RPCEvent {
+	e.authority = authority
+	return e
+}
+
+// Authority returns the authority.
+func (e *RPCEvent) Authority() string {
+	return e.authority
+}
+
+// WithUserAgent sets the user agent.
+func (e *RPCEvent) WithUserAgent(userAgent string) *RPCEvent {
+	e.userAgent = userAgent
+	return e
+}
+
+// UserAgent returns the user agent.
+func (e *RPCEvent) UserAgent() string {
+	return e.userAgent
+}
+
+// WithContentType sets the content type.
+func (e *RPCEvent) WithContentType(contentType string) *RPCEvent {
+	e.contentType = contentType
+	return e
+}
+
+// ContentType is the type of the response.
+func (e *RPCEvent) ContentType() string {
+	return e.contentType
+}
+
+// WithElapsed sets the elapsed time.
+func (e *RPCEvent) WithElapsed(elapsed time.Duration) *RPCEvent {
+	e.elapsed = elapsed
+	return e
+}
+
+// Elapsed returns the elapsed time.
+func (e *RPCEvent) Elapsed() time.Duration {
+	return e.elapsed
+}
+
+// WithErr sets the error on the event.
+func (e *RPCEvent) WithErr(err error) *RPCEvent {
+	e.err = err
+	return e
+}
+
+// Err returns the event err (if any).
+func (e RPCEvent) Err() error {
+	return e.err
 }
 
 // WriteText implements TextWritable.
-func (e RPCEvent) WriteText(tf TextFormatter, wr io.Writer) {
+func (e *RPCEvent) WriteText(tf TextFormatter, buf *bytes.Buffer) {
 
-	if e.Engine != "" {
-		io.WriteString(wr, "[")
-		io.WriteString(wr, tf.Colorize(e.Engine, ansi.ColorLightWhite))
-		io.WriteString(wr, "]")
+	if e.engine != "" {
+		buf.WriteString("[")
+		buf.WriteString(tf.Colorize(e.engine, ColorLightWhite))
+		buf.WriteString("]")
 	}
-	if e.Method != "" {
-		if e.Engine != "" {
-			io.WriteString(wr, Space)
+	if e.method != "" {
+		if e.engine != "" {
+			buf.WriteRune(RuneSpace)
 		}
-		io.WriteString(wr, tf.Colorize(e.Method, ansi.ColorBlue))
+		buf.WriteString(tf.Colorize(e.method, ColorBlue))
 	}
-	if e.Peer != "" {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, e.Peer)
+	if e.peer != "" {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(e.peer)
 	}
-	if e.Authority != "" {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, e.Authority)
+	if e.authority != "" {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(e.authority)
 	}
-	if e.UserAgent != "" {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, e.UserAgent)
+	if e.userAgent != "" {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(e.userAgent)
 	}
-	if e.ContentType != "" {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, e.ContentType)
+	if e.contentType != "" {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(e.contentType)
 	}
 
-	io.WriteString(wr, Space)
-	io.WriteString(wr, e.Elapsed.String())
+	buf.WriteRune(RuneSpace)
+	buf.WriteString(e.elapsed.String())
 
-	if e.Err != nil {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, tf.Colorize("failed", ansi.ColorRed))
+	if e.err != nil {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(tf.Colorize("failed", ColorRed))
 	}
 }
 
-// MarshalJSON implements json.Marshaler.
-func (e RPCEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(MergeDecomposed(e.EventMeta.Decompose(), map[string]interface{}{
-		"engine":      e.Engine,
-		"peer":        e.Peer,
-		"method":      e.Method,
-		"userAgent":   e.UserAgent,
-		"authority":   e.Authority,
-		"contentType": e.ContentType,
-		"elapsed":     timeutil.Milliseconds(e.Elapsed),
-		"err":         e.Err,
-	}))
+// WriteJSON implements JSONWritable.
+func (e *RPCEvent) WriteJSON() JSONObj {
+	return JSONObj{
+		"engine":         e.engine,
+		"peer":           e.peer,
+		"method":         e.method,
+		"authority":      e.authority,
+		"userAgent":      e.userAgent,
+		"contentType":    e.contentType,
+		JSONFieldElapsed: Milliseconds(e.elapsed),
+		JSONFieldErr:     e.err,
+	}
 }

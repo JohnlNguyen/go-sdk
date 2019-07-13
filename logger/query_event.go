@@ -1,149 +1,199 @@
 package logger
 
 import (
-	"context"
-	"encoding/json"
+	"bytes"
 	"fmt"
-	"io"
 	"time"
-
-	"github.com/blend/go-sdk/stringutil"
-	"github.com/blend/go-sdk/timeutil"
-
-	"github.com/blend/go-sdk/ansi"
 )
 
 // these are compile time assertions
 var (
-	_ Event          = (*QueryEvent)(nil)
-	_ TextWritable   = (*QueryEvent)(nil)
-	_ json.Marshaler = (*QueryEvent)(nil)
+	_ Event            = &QueryEvent{}
+	_ EventHeadings    = &QueryEvent{}
+	_ EventLabels      = &QueryEvent{}
+	_ EventAnnotations = &QueryEvent{}
 )
 
 // NewQueryEvent creates a new query event.
-func NewQueryEvent(body string, elapsed time.Duration, options ...QueryEventOption) *QueryEvent {
-	qe := QueryEvent{
+func NewQueryEvent(body string, elapsed time.Duration) *QueryEvent {
+	return &QueryEvent{
 		EventMeta: NewEventMeta(Query),
-		Body:      body,
-		Elapsed:   elapsed,
+		body:      body,
+		elapsed:   elapsed,
 	}
-	for _, opt := range options {
-		opt(&qe)
-	}
-	return &qe
 }
 
 // NewQueryEventListener returns a new listener for spiffy events.
-func NewQueryEventListener(listener func(context.Context, *QueryEvent)) Listener {
-	return func(ctx context.Context, e Event) {
+func NewQueryEventListener(listener func(e *QueryEvent)) Listener {
+	return func(e Event) {
 		if typed, isTyped := e.(*QueryEvent); isTyped {
-			listener(ctx, typed)
+			listener(typed)
 		}
 	}
-}
-
-// QueryEventOption mutates a query event.
-type QueryEventOption func(*QueryEvent)
-
-// OptQueryMeta sets options on the event metadata.
-func OptQueryMeta(options ...EventMetaOption) QueryEventOption {
-	return func(ae *QueryEvent) {
-		for _, option := range options {
-			option(ae.EventMeta)
-		}
-	}
-}
-
-// OptQueryBody sets a field on the query event.
-func OptQueryBody(value string) QueryEventOption {
-	return func(e *QueryEvent) { e.Body = value }
-}
-
-// OptQueryDatabase sets a field on the query event.
-func OptQueryDatabase(value string) QueryEventOption {
-	return func(e *QueryEvent) { e.Database = value }
-}
-
-// OptQueryEngine sets a field on the query event.
-func OptQueryEngine(value string) QueryEventOption {
-	return func(e *QueryEvent) { e.Engine = value }
-}
-
-// OptQueryUsername sets a field on the query event.
-func OptQueryUsername(value string) QueryEventOption {
-	return func(e *QueryEvent) { e.Username = value }
-}
-
-// OptQueryLabel sets a field on the query event.
-func OptQueryLabel(value string) QueryEventOption {
-	return func(e *QueryEvent) { e.QueryLabel = value }
-}
-
-// OptQueryElapsed sets a field on the query event.
-func OptQueryElapsed(value time.Duration) QueryEventOption {
-	return func(e *QueryEvent) { e.Elapsed = value }
-}
-
-// OptQueryErr sets a field on the query event.
-func OptQueryErr(value error) QueryEventOption {
-	return func(e *QueryEvent) { e.Err = value }
 }
 
 // QueryEvent represents a database query.
 type QueryEvent struct {
 	*EventMeta
 
-	Database   string
-	Engine     string
-	Username   string
-	QueryLabel string
-	Body       string
-	Elapsed    time.Duration
-	Err        error
+	database   string
+	engine     string
+	username   string
+	queryLabel string
+	body       string
+	elapsed    time.Duration
+	err        error
+}
+
+// WithHeadings sets the headings.
+func (e *QueryEvent) WithHeadings(headings ...string) *QueryEvent {
+	e.headings = headings
+	return e
+}
+
+// WithLabel sets a label on the event for later filtering.
+func (e *QueryEvent) WithLabel(key, value string) *QueryEvent {
+	e.AddLabelValue(key, value)
+	return e
+}
+
+// WithAnnotation adds an annotation to the event.
+func (e *QueryEvent) WithAnnotation(key, value string) *QueryEvent {
+	e.AddAnnotationValue(key, value)
+	return e
+}
+
+// WithFlag sets the flag.
+func (e *QueryEvent) WithFlag(flag Flag) *QueryEvent {
+	e.flag = flag
+	return e
+}
+
+// WithTimestamp sets the timestamp.
+func (e *QueryEvent) WithTimestamp(ts time.Time) *QueryEvent {
+	e.ts = ts
+	return e
+}
+
+// WithUsername sets the engine.
+func (e *QueryEvent) WithUsername(username string) *QueryEvent {
+	e.username = username
+	return e
+}
+
+// Username returns the username.
+func (e QueryEvent) Username() string {
+	return e.username
+}
+
+// WithEngine sets the engine.
+func (e *QueryEvent) WithEngine(engine string) *QueryEvent {
+	e.engine = engine
+	return e
+}
+
+// Engine returns the engine.
+func (e QueryEvent) Engine() string {
+	return e.engine
+}
+
+// WithDatabase sets the database.
+func (e *QueryEvent) WithDatabase(db string) *QueryEvent {
+	e.database = db
+	return e
+}
+
+// Database returns the event database.
+func (e QueryEvent) Database() string {
+	return e.database
+}
+
+// WithQueryLabel sets the query label.
+func (e *QueryEvent) WithQueryLabel(queryLabel string) *QueryEvent {
+	e.queryLabel = queryLabel
+	return e
+}
+
+// QueryLabel returns the query label.
+func (e QueryEvent) QueryLabel() string {
+	return e.queryLabel
+}
+
+// WithBody sets the body.
+func (e *QueryEvent) WithBody(body string) *QueryEvent {
+	e.body = body
+	return e
+}
+
+// Body returns the query body.
+func (e QueryEvent) Body() string {
+	return e.body
+}
+
+// WithElapsed sets the elapsed time.
+func (e *QueryEvent) WithElapsed(elapsed time.Duration) *QueryEvent {
+	e.elapsed = elapsed
+	return e
+}
+
+// Elapsed returns the elapsed time.
+func (e QueryEvent) Elapsed() time.Duration {
+	return e.elapsed
+}
+
+// WithErr sets the error on the event.
+func (e *QueryEvent) WithErr(err error) *QueryEvent {
+	e.err = err
+	return e
+}
+
+// Err returns the event err (if any).
+func (e QueryEvent) Err() error {
+	return e.err
 }
 
 // WriteText writes the event text to the output.
-func (e QueryEvent) WriteText(tf TextFormatter, wr io.Writer) {
-	io.WriteString(wr, "[")
-	if len(e.Engine) > 0 {
-		io.WriteString(wr, tf.Colorize(e.Engine, ansi.ColorLightWhite))
-		io.WriteString(wr, Space)
+func (e QueryEvent) WriteText(tf TextFormatter, buf *bytes.Buffer) {
+	buf.WriteString("[")
+	if len(e.engine) > 0 {
+		buf.WriteString(tf.Colorize(e.engine, ColorLightWhite))
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Username) > 0 {
-		io.WriteString(wr, tf.Colorize(e.Username, ansi.ColorLightWhite))
-		io.WriteString(wr, "@")
+	if len(e.username) > 0 {
+		buf.WriteString(tf.Colorize(e.username, ColorLightWhite))
+		buf.WriteRune('@')
 	}
-	io.WriteString(wr, tf.Colorize(e.Database, ansi.ColorLightWhite))
-	io.WriteString(wr, "]")
+	buf.WriteString(tf.Colorize(e.database, ColorLightWhite))
+	buf.WriteString("]")
 
-	if len(e.QueryLabel) > 0 {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, fmt.Sprintf("[%s]", tf.Colorize(e.QueryLabel, ansi.ColorLightWhite)))
-	}
-
-	io.WriteString(wr, Space)
-	io.WriteString(wr, e.Elapsed.String())
-
-	if e.Err != nil {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, tf.Colorize("failed", ansi.ColorRed))
+	if len(e.queryLabel) > 0 {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(fmt.Sprintf("[%s]", tf.Colorize(e.queryLabel, ColorLightWhite)))
 	}
 
-	if len(e.Body) > 0 {
-		io.WriteString(wr, Space)
-		io.WriteString(wr, stringutil.CompressSpace(e.Body))
+	buf.WriteRune(RuneSpace)
+	buf.WriteString(e.elapsed.String())
+
+	if e.err != nil {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(tf.Colorize("failed", ColorRed))
+	}
+
+	if len(e.body) > 0 {
+		buf.WriteRune(RuneSpace)
+		buf.WriteString(CompressWhitespace(e.body))
 	}
 }
 
-// MarshalJSON implements json.Marshaler.
-func (e QueryEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(MergeDecomposed(e.EventMeta.Decompose(), map[string]interface{}{
-		"engine":     e.Engine,
-		"database":   e.Database,
-		"username":   e.Username,
-		"queryLabel": e.QueryLabel,
-		"body":       e.Body,
-		"err":        e.Err,
-		"elapsed":    timeutil.Milliseconds(e.Elapsed),
-	}))
+// WriteJSON implements JSONWritable.
+func (e QueryEvent) WriteJSON() JSONObj {
+	return JSONObj{
+		"engine":         e.engine,
+		"database":       e.database,
+		"username":       e.username,
+		"queryLabel":     e.queryLabel,
+		"body":           e.body,
+		JSONFieldErr:     e.err,
+		JSONFieldElapsed: Milliseconds(e.elapsed),
+	}
 }

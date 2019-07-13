@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestMockClient(t *testing.T) {
@@ -39,7 +39,7 @@ func TestMockClientList(t *testing.T) {
 	client := NewMockClient()
 	data := map[string]string{"key_123": "value_xyz"}
 
-	f := func(path string) []string {
+	f := func(path string) []string{
 		vals, _ := client.List(todo, path)
 		return vals
 	}
@@ -60,6 +60,7 @@ func TestMockClientList(t *testing.T) {
 	assert.Len(results, 1)
 	assert.True(validate(results, "service/"))
 
+
 	results = f("secret/service/")
 	assert.Len(results, 2)
 	assert.True(validate(results, "abc/", "head"))
@@ -69,7 +70,7 @@ func TestMockClientList(t *testing.T) {
 	assert.True(validate(results, "key1", "key2", "key3", "folder1/", "folder2/"))
 }
 
-func validate(keys []string, values ...string) bool {
+func validate(keys []string, values ...string) bool{
 	m := make(map[string]struct{})
 
 	for _, k := range keys {
@@ -87,72 +88,4 @@ func validate(keys []string, values ...string) bool {
 		}
 	}
 	return true
-}
-
-func TestMockClientTransitEncrypt(t *testing.T) {
-	assert := assert.New(t)
-	client := NewMockClient()
-
-	err := client.CreateTransitKey(context.TODO(), "key1", map[string]interface{}{"mock_option": true})
-	assert.Nil(err)
-
-	cipher, err := client.Encrypt(context.TODO(), "key1", []byte(""), []byte("testo"))
-	assert.Nil(err)
-	assert.NotEmpty(string(cipher))
-
-	// Decrypt with correct context
-	plaintext, err := client.Decrypt(context.TODO(), "key1", []byte(""), cipher)
-	assert.Nil(err)
-	assert.Equal("testo", plaintext)
-
-	// Decrypt with incorrect context
-	plaintext, err = client.Decrypt(context.TODO(), "key1", []byte("bad"), cipher)
-	assert.Nil(err)
-	assert.NotEqual("testo", plaintext)
-}
-
-func TestMockClientTransitKeyOperations(t *testing.T) {
-	assert := assert.New(t)
-	client := NewMockClient()
-
-	err := client.CreateTransitKey(context.TODO(), "key1", map[string]interface{}{"mock_option": true})
-	assert.Nil(err)
-
-	// Error when deleting a non deletion_allowed key
-	err = client.DeleteTransitKey(context.TODO(), "key1")
-	assert.NotNil(err)
-
-	// Configure Key
-	err = client.ConfigureTransitKey(context.TODO(), "key1", map[string]interface{}{"deletion_allowed": true})
-	assert.Nil(err)
-
-	// Read Key
-	keyData, err := client.ReadTransitKey(context.TODO(), "key1")
-	assert.Nil(err)
-	assert.Equal(true, keyData["deletion_allowed"])
-
-	// Successfully delete key
-	err = client.DeleteTransitKey(context.TODO(), "key1")
-	assert.Nil(err)
-}
-
-func TestMockClientTransitNoKeyFailures(t *testing.T) {
-	assert := assert.New(t)
-	client := NewMockClient()
-
-	// Error when deleting a nonexistent key
-	err := client.DeleteTransitKey(context.TODO(), "key1")
-	assert.NotNil(err)
-
-	// Error configuring nonexistent key
-	err = client.ConfigureTransitKey(context.TODO(), "key1", map[string]interface{}{"deletion_allowed": true})
-	assert.NotNil(err)
-
-	// Error reading nonexistent key
-	_, err = client.ReadTransitKey(context.TODO(), "key1")
-	assert.NotNil(err)
-
-	// Error encrypting using nonexistent key
-	_, err = client.Encrypt(context.TODO(), "key1", []byte(""), []byte("testo"))
-	assert.NotNil(err)
 }

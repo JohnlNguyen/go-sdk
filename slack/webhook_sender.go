@@ -3,12 +3,13 @@ package slack
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 
 	"net/http"
 
-	"github.com/blend/go-sdk/ex"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/exception"
+	"go-sdk/webutil"
 )
 
 const (
@@ -21,9 +22,9 @@ var (
 )
 
 // New creates a new webhook sender.
-func New(cfg Config) *WebhookSender {
+func New(cfg *Config) *WebhookSender {
 	return &WebhookSender{
-		RequestSender: webutil.NewRequestSender(webutil.MustParseURL(cfg.Webhook)),
+		RequestSender: webutil.NewRequestSender(webutil.MustParseURL(cfg.WebhookOrDefault())),
 		Config:        cfg,
 	}
 }
@@ -31,16 +32,16 @@ func New(cfg Config) *WebhookSender {
 // WebhookSender sends slack webhooks.
 type WebhookSender struct {
 	*webutil.RequestSender
-	Config Config
+	Config *Config
 }
 
 // Defaults returns default message options.
 func (whs WebhookSender) Defaults() []MessageOption {
 	return []MessageOption{
-		WithUsernameOrDefault(whs.Config.Username),
-		WithChannelOrDefault(whs.Config.Channel),
-		WithIconEmojiOrDefault(whs.Config.IconEmoji),
-		WithIconURLOrDefault(whs.Config.IconURL),
+		WithUsernameOrDefault(whs.Config.UsernameOrDefault()),
+		WithChannelOrDefault(whs.Config.ChannelOrDefault()),
+		WithIconEmojiOrDefault(whs.Config.IconEmojiOrDefault()),
+		WithIconURLOrDefault(whs.Config.IconURLOrDefault()),
 	}
 }
 
@@ -55,9 +56,9 @@ func (whs WebhookSender) Send(ctx context.Context, message Message) error {
 	if res.StatusCode > http.StatusOK {
 		contents, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return ex.New(err)
+			return exception.New(err)
 		}
-		return ex.New(ErrNon200, ex.OptMessage(string(contents)))
+		return exception.New(ErrNon200).WithMessage(string(contents))
 	}
 	return nil
 }
@@ -73,11 +74,11 @@ func (whs WebhookSender) SendAndReadResponse(ctx context.Context, message Messag
 	var contents PostMessageResponse
 	err = json.NewDecoder(res.Body).Decode(&contents)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 
 	if res.StatusCode > http.StatusOK {
-		return &contents, ex.New(ErrNon200, ex.OptMessagef("%#v", contents))
+		return &contents, exception.New(ErrNon200).WithMessage(fmt.Sprintf("%#v", contents))
 	}
 
 	return &contents, nil

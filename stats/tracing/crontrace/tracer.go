@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/stats/tracing"
+	"go-sdk/cron"
+	"go-sdk/stats/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 

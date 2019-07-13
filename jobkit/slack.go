@@ -3,8 +3,8 @@ package jobkit
 import (
 	"fmt"
 
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/slack"
+	"go-sdk/cron"
+	"go-sdk/slack"
 )
 
 // NewSlackMessage returns a new job started message.

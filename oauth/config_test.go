@@ -3,8 +3,8 @@ package oauth
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/env"
+	"go-sdk/assert"
+	"go-sdk/env"
 )
 
 func TestNewConfigFromEnv(t *testing.T) {
@@ -16,13 +16,12 @@ func TestNewConfigFromEnv(t *testing.T) {
 	env.Env().Set("OAUTH_CLIENT_ID", "foo")
 	env.Env().Set("OAUTH_CLIENT_SECRET", "bar")
 
-	cfg := &Config{}
-	err := cfg.Resolve()
+	cfg, err := NewConfigFromEnv()
 	assert.Nil(err)
-	assert.Equal("foo", cfg.ClientID)
-	assert.Equal("bar", cfg.ClientSecret)
-	assert.Equal("https://app.com/oauth/google", cfg.RedirectURI)
-	assert.Equal("foo.com", cfg.HostedDomain)
+	assert.Equal("foo", cfg.GetClientID())
+	assert.Equal("bar", cfg.GetClientSecret())
+	assert.Equal("https://app.com/oauth/google", cfg.GetRedirectURI())
+	assert.Equal("foo.com", cfg.GetHostedDomain())
 }
 
 func TestConfig(t *testing.T) {

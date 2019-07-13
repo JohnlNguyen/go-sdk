@@ -1,12 +1,11 @@
 package async
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/graceful"
+	"go-sdk/assert"
+	"go-sdk/graceful"
 )
 
 // Assert a latch is graceful
@@ -19,7 +18,7 @@ func TestIntervalWorker(t *testing.T) {
 
 	var didWork bool
 	done := make(chan struct{})
-	w := NewInterval(func(_ context.Context) error {
+	w := NewInterval(func() error {
 		defer func() {
 			close(done)
 		}()
@@ -27,14 +26,10 @@ func TestIntervalWorker(t *testing.T) {
 		return nil
 	}, time.Millisecond)
 
-	assert.Equal(time.Millisecond, w.Interval)
-
-	go w.Start()
-	<-w.NotifyStarted()
-
-	assert.True(w.IsStarted())
+	w.Start()
+	assert.True(w.Latch().IsRunning())
 	<-done
 	w.Stop()
-	assert.True(w.IsStopped())
+	assert.True(w.Latch().IsStopped())
 	assert.True(didWork)
 }

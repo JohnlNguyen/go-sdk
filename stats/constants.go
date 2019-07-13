@@ -1,6 +1,6 @@
 package stats
 
-import "github.com/blend/go-sdk/logger"
+import "go-sdk/logger"
 
 // MetricNames are names we use when sending data to the collectors.
 const (

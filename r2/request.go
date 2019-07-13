@@ -7,10 +7,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 // New returns a new request.
@@ -19,10 +18,10 @@ func New(remoteURL string, options ...Option) *Request {
 	var r Request
 	parsedURL, err := url.Parse(remoteURL)
 	if err != nil {
-		r.Err = ex.New(err)
+		r.Err = err
 		return &r
 	}
-	r.Request = http.Request{
+	r.Request = &http.Request{
 		Method: MethodGet,
 		URL:    parsedURL,
 	}
@@ -37,36 +36,26 @@ func New(remoteURL string, options ...Option) *Request {
 
 // Request is a combination of the http.Request options and the underlying client.
 type Request struct {
-	http.Request
+	*http.Request
+	Client *http.Client
 
 	// Err is an error set on construction.
-	// It is checked before sending the request, and will be returned from any of the
-	// methods that execute the request.
-	// It is typically set in `New(string,...Option)`.
+	// It pre-empts the request going out.
 	Err error
-	// Client is the underlying http client used to make the requests.
-	Client *http.Client
-	// Closer is an optional step to run as part of the Close() function.
-	Closer func() error
-	// Tracer is used to report span contexts to a distributed tracing collector.
-	Tracer Tracer
-	// OnRequest is an array of request lifecycle hooks used for logging.
-	OnRequest []OnRequestListener
-	// OnResponse is an array of response lifecycle hooks used for logging.
+
+	// ResponseBodyInterceptor is an optional custom step to alter the response stream.
+	ResponseBodyInterceptor ReaderInterceptor
+	Tracer                  Tracer
+
+	// OnRequest and OnResponse are lifecycle hooks.
+	OnRequest  []OnRequestListener
 	OnResponse []OnResponseListener
 }
 
 // Do executes the request.
-func (r Request) Do() (*http.Response, error) {
+func (r *Request) Do() (*http.Response, error) {
 	if r.Err != nil {
 		return nil, r.Err
-	}
-
-	// reconcile post form values
-	if r.Request.PostForm != nil && len(r.Request.PostForm) > 0 {
-		if r.Request.Body == nil {
-			r.Request.Body = ioutil.NopCloser(strings.NewReader(r.Request.PostForm.Encode()))
-		}
 	}
 
 	var err error
@@ -74,73 +63,63 @@ func (r Request) Do() (*http.Response, error) {
 
 	var finisher TraceFinisher
 	if r.Tracer != nil {
-		finisher = r.Tracer.Start(&r.Request)
+		finisher = r.Tracer.Start(r.Request)
 	}
 
 	for _, listener := range r.OnRequest {
-		if err = listener(&r.Request); err != nil {
+		if err = listener(r.Request); err != nil {
 			return nil, err
 		}
 	}
 
 	var res *http.Response
 	if r.Client != nil {
-		res, err = r.Client.Do(&r.Request)
+		res, err = r.Client.Do(r.Request)
 	} else {
-		res, err = http.DefaultClient.Do(&r.Request)
+		res, err = http.DefaultClient.Do(r.Request)
 	}
 	if finisher != nil {
-		finisher.Finish(&r.Request, res, started, err)
+		finisher.Finish(r.Request, res, started, err)
 	}
 	for _, listener := range r.OnResponse {
-		if err = listener(&r.Request, res, started, err); err != nil {
+		if err = listener(r.Request, res, started, err); err != nil {
 			return nil, err
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
+
+	// apply the interceptor if supplied.
+	res.Body = r.responseBody(res)
+
 	return res, nil
 }
 
-// Close closes the request if there is a closer specified.
-func (r *Request) Close() error {
-	if r.Closer != nil {
-		return r.Closer()
+// Close executes and closes the response.
+// It returns the response for metadata purposes.
+// It does not read any data from the response.
+func (r *Request) Close() (*http.Response, error) {
+	res, err := r.Do()
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return res, exception.New(res.Body.Close())
 }
 
 // Discard reads the response fully and discards all data it reads.
 func (r *Request) Discard() error {
-	defer r.Close()
-
 	res, err := r.Do()
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	_, err = io.Copy(ioutil.Discard, res.Body)
-	return ex.New(err)
-}
-
-// DiscardWithResponse reads the response fully and discards all data it reads, and returns the response metadata.
-func (r Request) DiscardWithResponse() (*http.Response, error) {
-	defer r.Close()
-
-	res, err := r.Do()
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	_, err = io.Copy(ioutil.Discard, res.Body)
-	return res, ex.New(err)
+	return exception.New(err)
 }
 
 // CopyTo copies the response body to a given writer.
-func (r Request) CopyTo(dst io.Writer) (int64, error) {
-	defer r.Close()
-
+func (r *Request) CopyTo(dst io.Writer) (int64, error) {
 	res, err := r.Do()
 	if err != nil {
 		return 0, err
@@ -148,15 +127,13 @@ func (r Request) CopyTo(dst io.Writer) (int64, error) {
 	defer res.Body.Close()
 	count, err := io.Copy(dst, res.Body)
 	if err != nil {
-		return count, ex.New(err)
+		return count, exception.New(err)
 	}
 	return count, nil
 }
 
 // Bytes reads the response and returns it as a byte array.
-func (r Request) Bytes() ([]byte, error) {
-	defer r.Close()
-
+func (r *Request) Bytes() ([]byte, error) {
 	res, err := r.Do()
 	if err != nil {
 		return nil, err
@@ -164,71 +141,48 @@ func (r Request) Bytes() ([]byte, error) {
 	defer res.Body.Close()
 	contents, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, ex.New(err)
+		return nil, exception.New(err)
 	}
 	return contents, nil
 }
 
-// BytesWithResponse reads the response and returns it as a byte array, along with the response metadata..
-func (r Request) BytesWithResponse() ([]byte, *http.Response, error) {
-	defer r.Close()
-
-	res, err := r.Do()
+// String reads the response and returns it as a string
+func (r *Request) String() (string, error) {
+	contents, err := r.Bytes()
 	if err != nil {
-		return nil, nil, err
+		return "", err
 	}
-	defer res.Body.Close()
-	contents, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, nil, ex.New(err)
-	}
-	return contents, res, nil
+	return string(contents), nil
 }
 
 // JSON reads the response as json into a given object.
-func (r Request) JSON(dst interface{}) error {
-	defer r.Close()
-
+func (r *Request) JSON(dst interface{}) error {
 	res, err := r.Do()
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	return ex.New(json.NewDecoder(res.Body).Decode(dst))
-}
-
-// JSONWithResponse reads the response as json into a given object and returns the response metadata.
-func (r Request) JSONWithResponse(dst interface{}) (*http.Response, error) {
-	defer r.Close()
-
-	res, err := r.Do()
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	return res, ex.New(json.NewDecoder(res.Body).Decode(dst))
+	return exception.New(json.NewDecoder(res.Body).Decode(dst))
 }
 
 // XML reads the response as json into a given object.
-func (r Request) XML(dst interface{}) error {
-	defer r.Close()
-
+func (r *Request) XML(dst interface{}) error {
 	res, err := r.Do()
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	return ex.New(xml.NewDecoder(res.Body).Decode(dst))
+	return exception.New(xml.NewDecoder(res.Body).Decode(dst))
 }
 
-// XMLWithResponse reads the response as json into a given object.
-func (r Request) XMLWithResponse(dst interface{}) (*http.Response, error) {
-	defer r.Close()
+//
+// utils
+//
 
-	res, err := r.Do()
-	if err != nil {
-		return nil, err
+// responseBody applies a ResponseBodyInterceptor if it's supplied.
+func (r *Request) responseBody(res *http.Response) io.ReadCloser {
+	if r.ResponseBodyInterceptor != nil {
+		return NewReadCloser(res.Body, r.ResponseBodyInterceptor)
 	}
-	defer res.Body.Close()
-	return res, ex.New(xml.NewDecoder(res.Body).Decode(dst))
+	return res.Body
 }

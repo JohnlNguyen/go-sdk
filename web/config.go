@@ -6,48 +6,77 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/configutil"
+	"go-sdk/env"
+	"go-sdk/webutil"
 )
+
+// NewConfigFromEnv returns a new config from the environment.
+func NewConfigFromEnv() (*Config, error) {
+	var cfg Config
+	if err := env.Env().ReadInto(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// MustNewConfigFromEnv returns a new config from environment variables,
+// and will panic on error.
+func MustNewConfigFromEnv() *Config {
+	cfg, err := NewConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}
 
 // Config is an object used to set up a web app.
 type Config struct {
-	Port                      int32         `json:"port,omitempty" yaml:"port,omitempty" env:"PORT"`
-	BindAddr                  string        `json:"bindAddr,omitempty" yaml:"bindAddr,omitempty" env:"BIND_ADDR"`
-	BaseURL                   string        `json:"baseURL,omitempty" yaml:"baseURL,omitempty" env:"BASE_URL"`
-	SkipRedirectTrailingSlash bool          `json:"skipRedirectTrailingSlash,omitempty" yaml:"skipRedirectTrailingSlash,omitempty"`
-	HandleOptions             bool          `json:"handleOptions,omitempty" yaml:"handleOptions,omitempty"`
-	HandleMethodNotAllowed    bool          `json:"handleMethodNotAllowed,omitempty" yaml:"handleMethodNotAllowed,omitempty"`
-	DisablePanicRecovery      bool          `json:"disablePanicRecovery,omitempty" yaml:"disablePanicRecovery,omitempty"`
-	AuthManagerMode           string        `json:"authManagerMode" yaml:"authManagerMode"`
-	AuthSecret                string        `json:"authSecret" yaml:"authSecret" env:"AUTH_SECRET"`
-	SessionTimeout            time.Duration `json:"sessionTimeout,omitempty" yaml:"sessionTimeout,omitempty" env:"SESSION_TIMEOUT"`
-	SessionTimeoutIsRelative  bool          `json:"sessionTimeoutIsRelative,omitempty" yaml:"sessionTimeoutIsRelative,omitempty" env:"SESSION_TIMEOUT_RELATIVE"`
+	Port     int32  `json:"port,omitempty" yaml:"port,omitempty" env:"PORT"`
+	BindAddr string `json:"bindAddr,omitempty" yaml:"bindAddr,omitempty" env:"BIND_ADDR"`
+	BaseURL  string `json:"baseURL,omitempty" yaml:"baseURL,omitempty" env:"BASE_URL"`
 
-	CookieSecure   *bool  `json:"cookieSecure,omitempty" yaml:"cookieSecure,omitempty" env:"COOKIE_SECURE"`
-	CookieHTTPOnly *bool  `json:"cookieHTTPOnly,omitempty" yaml:"cookieHTTPOnly,omitempty" env:"COOKIE_HTTP_ONLY"`
-	CookieSameSite string `json:"cookieSameSite,omitempty" yaml:"cookieSameSite,omitempty" env:"COOKIE_SAME_SITE"`
-	CookieName     string `json:"cookieName,omitempty" yaml:"cookieName,omitempty" env:"COOKIE_NAME"`
-	CookiePath     string `json:"cookiePath,omitempty" yaml:"cookiePath,omitempty" env:"COOKIE_PATH"`
+	RedirectTrailingSlash  *bool `json:"redirectTrailingSlash,omitempty" yaml:"redirectTrailingSlash,omitempty"`
+	HandleOptions          *bool `json:"handleOptions,omitempty" yaml:"handleOptions,omitempty"`
+	HandleMethodNotAllowed *bool `json:"handleMethodNotAllowed,omitempty" yaml:"handleMethodNotAllowed,omitempty"`
+	RecoverPanics          *bool `json:"recoverPanics,omitempty" yaml:"recoverPanics,omitempty"`
 
-	DefaultHeaders      map[string]string `json:"defaultHeaders,omitempty" yaml:"defaultHeaders,omitempty"`
-	MaxHeaderBytes      int               `json:"maxHeaderBytes,omitempty" yaml:"maxHeaderBytes,omitempty" env:"MAX_HEADER_BYTES"`
-	ReadTimeout         time.Duration     `json:"readTimeout,omitempty" yaml:"readTimeout,omitempty" env:"READ_HEADER_TIMEOUT"`
-	ReadHeaderTimeout   time.Duration     `json:"readHeaderTimeout,omitempty" yaml:"readHeaderTimeout,omitempty" env:"READ_HEADER_TIMEOUT"`
-	WriteTimeout        time.Duration     `json:"writeTimeout,omitempty" yaml:"writeTimeout,omitempty" env:"WRITE_TIMEOUT"`
-	IdleTimeout         time.Duration     `json:"idleTimeout,omitempty" yaml:"idleTimeout,omitempty" env:"IDLE_TIMEOUT"`
-	ShutdownGracePeriod time.Duration     `json:"shutdownGracePeriod" yaml:"shutdownGracePeriod" env:"SHUTDOWN_GRACE_PERIOD"`
+	// AuthManagerMode is a mode designation for the auth manager.
+	AuthManagerMode string `json:"authManagerMode" yaml:"authManagerMode"`
+	// AuthSecret is a secret key to use with auth management.
+	AuthSecret string `json:"authSecret" yaml:"authSecret" env:"AUTH_SECRET"`
+	// SessionTimeout is a fixed duration to use when calculating hard or rolling deadlines.
+	SessionTimeout time.Duration `json:"sessionTimeout,omitempty" yaml:"sessionTimeout,omitempty" env:"SESSION_TIMEOUT"`
+	// SessionTimeoutIsAbsolute determines if the session timeout is a hard deadline or if it gets pushed forward with usage.
+	// The default is to use a hard deadline.
+	SessionTimeoutIsAbsolute *bool `json:"sessionTimeoutIsAbsolute,omitempty" yaml:"sessionTimeoutIsAbsolute,omitempty" env:"SESSION_TIMEOUT_ABSOLUTE"`
+	// CookieHTTPS determines if we should flip the `https only` flag on issued cookies.
+	CookieHTTPSOnly *bool `json:"cookieHTTPSOnly,omitempty" yaml:"cookieHTTPSOnly,omitempty" env:"COOKIE_HTTPS_ONLY"`
+	// CookieName is the name of the cookie to issue with sessions.
+	CookieName string `json:"cookieName,omitempty" yaml:"cookieName,omitempty" env:"COOKIE_NAME"`
+	// CookiePath is the path on the cookie to issue with sessions.
+	CookiePath string `json:"cookiePath,omitempty" yaml:"cookiePath,omitempty" env:"COOKIE_PATH"`
 
+	// DefaultHeaders are included on any responses. The app ships with a set of default headers, which you can augment with this property.
+	DefaultHeaders map[string]string `json:"defaultHeaders,omitempty" yaml:"defaultHeaders,omitempty"`
+
+	MaxHeaderBytes    int           `json:"maxHeaderBytes,omitempty" yaml:"maxHeaderBytes,omitempty" env:"MAX_HEADER_BYTES"`
+	ReadTimeout       time.Duration `json:"readTimeout,omitempty" yaml:"readTimeout,omitempty" env:"READ_HEADER_TIMEOUT"`
+	ReadHeaderTimeout time.Duration `json:"readHeaderTimeout,omitempty" yaml:"readHeaderTimeout,omitempty" env:"READ_HEADER_TIMEOUT"`
+	WriteTimeout      time.Duration `json:"writeTimeout,omitempty" yaml:"writeTimeout,omitempty" env:"WRITE_TIMEOUT"`
+	IdleTimeout       time.Duration `json:"idleTimeout,omitempty" yaml:"idleTimeout,omitempty" env:"IDLE_TIMEOUT"`
+
+	ShutdownGracePeriod time.Duration `json:"shutdownGracePeriod" yaml:"shutdownGracePeriod" env:"SHUTDOWN_GRACE_PERIOD"`
+
+	HSTS  HSTSConfig      `json:"hsts,omitempty" yaml:"hsts,omitempty"`
+	TLS   TLSConfig       `json:"tls,omitempty" yaml:"tls,omitempty"`
 	Views ViewCacheConfig `json:"views,omitempty" yaml:"views,omitempty"`
+
+	Healthz HealthzConfig `json:"healthz,omitempty" yaml:"healthz,omitempty"`
 }
 
-// Resolve resolves the config from other sources.
-func (c *Config) Resolve() error {
-	return env.Env().ReadInto(c)
-}
-
-// BindAddrOrDefault returns the bind address or a default.
-func (c Config) BindAddrOrDefault(defaults ...string) string {
+// GetBindAddr configutil.Coalesces the bind addr, the port, or the default.
+func (c Config) GetBindAddr(defaults ...string) string {
 	if len(c.BindAddr) > 0 {
 		return c.BindAddr
 	}
@@ -60,13 +89,16 @@ func (c Config) BindAddrOrDefault(defaults ...string) string {
 	return DefaultBindAddr
 }
 
-// PortOrDefault returns the int32 port for a given config.
+// GetPort returns the int32 port for a given config.
 // This is useful in things like kubernetes pod templates.
 // If the config .Port is unset, it will parse the .BindAddr,
 // or the DefaultBindAddr for the port number.
-func (c Config) PortOrDefault() int32 {
+func (c Config) GetPort(defaults ...int32) int32 {
 	if c.Port > 0 {
 		return c.Port
+	}
+	if len(defaults) > 0 {
+		return defaults[0]
 	}
 	if len(c.BindAddr) > 0 {
 		return webutil.PortFromBindAddr(c.BindAddr)
@@ -74,29 +106,73 @@ func (c Config) PortOrDefault() int32 {
 	return webutil.PortFromBindAddr(DefaultBindAddr)
 }
 
-// BaseURLOrDefault gets the base url for the app or a default.
-func (c Config) BaseURLOrDefault() string {
-	return c.BaseURL
+// GetBaseURL gets a property.
+func (c Config) GetBaseURL(defaults ...string) string {
+	return configutil.CoalesceString(c.BaseURL, "", defaults...)
+}
+
+// GetRedirectTrailingSlash returns if we automatically redirect for a missing trailing slash.
+func (c Config) GetRedirectTrailingSlash(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.RedirectTrailingSlash, DefaultRedirectTrailingSlash, defaults...)
+}
+
+// GetHandleOptions returns if we should handle OPTIONS verb requests.
+func (c Config) GetHandleOptions(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.HandleOptions, DefaultHandleOptions, defaults...)
+}
+
+// GetHandleMethodNotAllowed returns if we should handle method not allowed results.
+func (c Config) GetHandleMethodNotAllowed(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.HandleMethodNotAllowed, DefaultHandleMethodNotAllowed, defaults...)
+}
+
+// GetRecoverPanics returns if we should recover panics or not.
+func (c Config) GetRecoverPanics(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.RecoverPanics, DefaultRecoverPanics, defaults...)
+}
+
+// GetDefaultHeaders returns the default headers from the config.
+func (c Config) GetDefaultHeaders(inherited ...map[string]string) map[string]string {
+	output := map[string]string{}
+	if len(inherited) > 0 {
+		for _, set := range inherited {
+			for key, value := range set {
+				output[key] = value
+			}
+		}
+	}
+	for key, value := range c.DefaultHeaders {
+		output[key] = value
+	}
+	return output
+}
+
+// ListenTLS returns if the server will directly serve requests with tls.
+func (c Config) ListenTLS() bool {
+	return c.TLS.HasKeyPair()
 }
 
 // BaseURLIsSecureScheme returns if the base url starts with a secure scheme.
 func (c Config) BaseURLIsSecureScheme() bool {
-	if c.BaseURL == "" {
+	baseURL := c.GetBaseURL()
+	if len(baseURL) == 0 {
 		return false
 	}
-	return strings.HasPrefix(strings.ToLower(c.BaseURL), SchemeHTTPS) || strings.HasPrefix(strings.ToLower(c.BaseURL), SchemeSPDY)
+	return strings.HasPrefix(strings.ToLower(baseURL), SchemeHTTPS) || strings.HasPrefix(strings.ToLower(baseURL), SchemeSPDY)
 }
 
-// AuthManagerModeOrDefault returns the auth manager mode.
-func (c Config) AuthManagerModeOrDefault() AuthManagerMode {
-	if c.AuthManagerMode != "" {
-		return AuthManagerMode(c.AuthManagerMode)
-	}
-	return AuthManagerModeRemote
+// IsSecure returns if the config specifies the app will eventually be handling https requests.
+func (c Config) IsSecure() bool {
+	return c.ListenTLS() || c.BaseURLIsSecureScheme()
 }
 
-// MustAuthSecret returns the auth secret and panics if there is an error decoding it.
-func (c Config) MustAuthSecret() []byte {
+// GetAuthManagerMode returns the auth manager mode.
+func (c Config) GetAuthManagerMode(inherited ...string) AuthManagerMode {
+	return AuthManagerMode(configutil.CoalesceString(c.AuthManagerMode, string(AuthManagerModeServer), inherited...))
+}
+
+// GetAuthSecret returns a property or a default.
+func (c Config) GetAuthSecret(defaults ...[]byte) []byte {
 	decoded, err := base64.StdEncoding.DecodeString(c.AuthSecret)
 	if err != nil {
 		panic(err)
@@ -104,101 +180,57 @@ func (c Config) MustAuthSecret() []byte {
 	return decoded
 }
 
-// SessionTimeoutOrDefault returns a property or a default.
-func (c Config) SessionTimeoutOrDefault() time.Duration {
-	if c.SessionTimeout > 0 {
-		return c.SessionTimeout
-	}
-	return DefaultSessionTimeout
+// GetSessionTimeout returns a property or a default.
+func (c Config) GetSessionTimeout(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.SessionTimeout, DefaultSessionTimeout, defaults...)
 }
 
-// CookieNameOrDefault returns a property or a default.
-func (c Config) CookieNameOrDefault() string {
-	if c.CookieName != "" {
-		return c.CookieName
-	}
-	return DefaultCookieName
+// GetSessionTimeoutIsAbsolute returns a property or a default.
+func (c Config) GetSessionTimeoutIsAbsolute(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.SessionTimeoutIsAbsolute, DefaultSessionTimeoutIsAbsolute, defaults...)
 }
 
-// CookiePathOrDefault returns a property or a default.
-func (c Config) CookiePathOrDefault() string {
-	if c.CookiePath != "" {
-		return c.CookiePath
-	}
-	return DefaultCookiePath
+// GetCookieHTTPSOnly returns a property or a default.
+func (c Config) GetCookieHTTPSOnly(defaults ...bool) bool {
+	return configutil.CoalesceBool(c.CookieHTTPSOnly, c.IsSecure(), defaults...)
 }
 
-// CookieSecureOrDefault returns a property or a default.
-func (c Config) CookieSecureOrDefault() bool {
-	if c.CookieSecure != nil {
-		return *c.CookieSecure
-	}
-	if baseURL := c.BaseURLOrDefault(); baseURL != "" {
-		return strings.HasPrefix(baseURL, SchemeHTTPS) || strings.HasPrefix(baseURL, SchemeSPDY)
-	}
-	return DefaultCookieSecure
+// GetCookieName returns a property or a default.
+func (c Config) GetCookieName(defaults ...string) string {
+	return configutil.CoalesceString(c.CookieName, DefaultCookieName, defaults...)
 }
 
-// CookieHTTPOnlyOrDefault returns a property or a default.
-func (c Config) CookieHTTPOnlyOrDefault() bool {
-	if c.CookieHTTPOnly != nil {
-		return *c.CookieHTTPOnly
-	}
-	return DefaultCookieHTTPOnly
+// GetCookiePath returns a property or a default.
+func (c Config) GetCookiePath(defaults ...string) string {
+	return configutil.CoalesceString(c.CookiePath, DefaultCookiePath, defaults...)
 }
 
-// CookieSameSiteOrDefault returns a property or a default.
-func (c Config) CookieSameSiteOrDefault() string {
-	if c.CookieSameSite != "" {
-		return c.CookieSameSite
-	}
-	return DefaultCookieSameSite
+// GetMaxHeaderBytes returns the maximum header size in bytes or a default.
+func (c Config) GetMaxHeaderBytes(defaults ...int) int {
+	return configutil.CoalesceInt(c.MaxHeaderBytes, DefaultMaxHeaderBytes, defaults...)
 }
 
-// MaxHeaderBytesOrDefault returns the maximum header size in bytes or a default.
-func (c Config) MaxHeaderBytesOrDefault() int {
-	if c.MaxHeaderBytes > 0 {
-		return c.MaxHeaderBytes
-	}
-	return DefaultMaxHeaderBytes
+// GetReadTimeout gets a property.
+func (c Config) GetReadTimeout(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.ReadTimeout, DefaultReadTimeout, defaults...)
 }
 
-// ReadTimeoutOrDefault gets a property.
-func (c Config) ReadTimeoutOrDefault() time.Duration {
-	if c.ReadTimeout > 0 {
-		return c.ReadTimeout
-	}
-	return DefaultReadTimeout
+// GetReadHeaderTimeout gets a property.
+func (c Config) GetReadHeaderTimeout(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.ReadHeaderTimeout, DefaultReadHeaderTimeout, defaults...)
 }
 
-// ReadHeaderTimeoutOrDefault gets a property.
-func (c Config) ReadHeaderTimeoutOrDefault() time.Duration {
-	if c.ReadHeaderTimeout > 0 {
-		return c.ReadHeaderTimeout
-	}
-	return DefaultReadHeaderTimeout
+// GetWriteTimeout gets a property.
+func (c Config) GetWriteTimeout(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.WriteTimeout, DefaultWriteTimeout, defaults...)
 }
 
-// WriteTimeoutOrDefault gets a property.
-func (c Config) WriteTimeoutOrDefault() time.Duration {
-	if c.WriteTimeout > 0 {
-		return c.WriteTimeout
-	}
-	return DefaultWriteTimeout
+// GetIdleTimeout gets a property.
+func (c Config) GetIdleTimeout(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.IdleTimeout, DefaultIdleTimeout, defaults...)
 }
 
-// IdleTimeoutOrDefault gets a property.
-func (c Config) IdleTimeoutOrDefault() time.Duration {
-	if c.IdleTimeout > 0 {
-		return c.IdleTimeout
-	}
-	return DefaultIdleTimeout
-}
-
-// ShutdownGracePeriodOrDefault gets the shutdown grace period.
-func (c Config) ShutdownGracePeriodOrDefault() time.Duration {
-	if c.ShutdownGracePeriod > 0 {
-		return c.ShutdownGracePeriod
-	}
-	return DefaultShutdownGracePeriod
+// GetShutdownGracePeriod gets the shutdown grace period.
+func (c Config) GetShutdownGracePeriod(defaults ...time.Duration) time.Duration {
+	return configutil.CoalesceDuration(c.ShutdownGracePeriod, DefaultShutdownGracePeriod, defaults...)
 }

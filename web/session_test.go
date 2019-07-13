@@ -3,7 +3,7 @@ package web
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestSession(t *testing.T) {

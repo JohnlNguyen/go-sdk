@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/graceful"
-	"github.com/blend/go-sdk/uuid"
+	"go-sdk/assert"
+	"go-sdk/graceful"
+	"go-sdk/uuid"
 )
 
 var (
@@ -17,12 +17,12 @@ var (
 func TestJobSchedulerCullHistoryMaxAge(t *testing.T) {
 	assert := assert.New(t)
 
-	js := NewJobScheduler(NewJob("foo", noop),
-		OptJobSchedulerConfig(Config{
-			HistoryMaxCount: 10,
-			HistoryMaxAge:   6 * time.Hour,
-		}),
-	)
+	js := NewJobScheduler(&Config{
+		History: HistoryConfig{
+			MaxCount: 10,
+			MaxAge:   6 * time.Hour,
+		},
+	}, NewJob("foo", noop))
 
 	js.History = []JobInvocation{
 		{ID: uuid.V4().String(), Started: time.Now().Add(-10 * time.Hour)},
@@ -44,12 +44,12 @@ func TestJobSchedulerCullHistoryMaxAge(t *testing.T) {
 func TestJobSchedulerCullHistoryMaxCount(t *testing.T) {
 	assert := assert.New(t)
 
-	js := NewJobScheduler(NewJob("foo", noop),
-		OptJobSchedulerConfig(Config{
-			HistoryMaxCount: 5,
-			HistoryMaxAge:   6 * time.Hour,
-		}),
-	)
+	js := NewJobScheduler(&Config{
+		History: HistoryConfig{
+			MaxCount: 5,
+			MaxAge:   6 * time.Hour,
+		},
+	}, NewJob("foo", noop))
 
 	js.History = []JobInvocation{
 		{ID: uuid.V4().String(), Started: time.Now().Add(-10 * time.Minute)},
@@ -72,23 +72,21 @@ func TestJobSchedulerEnableDisable(t *testing.T) {
 	assert := assert.New(t)
 
 	var enabled, disabled bool
-
-	js := NewJobScheduler(
-		NewJob("foo",
-			noop,
-			OptJobBuilderOnDisabled(func(_ context.Context) { disabled = true }),
-			OptJobBuilderOnEnabled(func(_ context.Context) { enabled = true }),
-		),
-		OptJobSchedulerConfig(Config{
-			HistoryMaxCount: 5,
-			HistoryMaxAge:   6 * time.Hour,
-		}),
-	)
+	js := NewJobScheduler(&Config{
+		History: HistoryConfig{
+			MaxCount: 5,
+			MaxAge:   6 * time.Hour,
+		},
+	}, NewJob("foo", noop).WithOnDisabled(func(_ context.Context) {
+		disabled = true
+	}).WithOnEnabled(func(_ context.Context) {
+		enabled = true
+	}))
 
 	js.Disable()
 	assert.True(js.Disabled)
 
-	assert.False(js.enabled())
+	assert.False(js.canRun())
 
 	js.Enable()
 	assert.False(js.Disabled)

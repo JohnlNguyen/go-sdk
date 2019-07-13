@@ -5,8 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
-	"github.com/blend/go-sdk/ex"
 )
 
 // MustCmds returns a list of commands for a given set of statements.
@@ -46,9 +44,9 @@ func MustCmdParsed(statement string) *exec.Cmd {
 
 // CmdParsed returns a command for a full comamnd statement.
 func CmdParsed(statement string) (*exec.Cmd, error) {
-	parts := strings.Split(statement, " ")
+	parts := strings.SplitN(statement, " ", 2)
 	if len(parts) > 1 {
-		return Cmd(parts[0], parts[1:]...)
+		return Cmd(parts[0], parts[1])
 	}
 	return Cmd(parts[0])
 }
@@ -67,7 +65,7 @@ func CmdParsedContext(ctx context.Context, statement string) (*exec.Cmd, error) 
 func MustCmd(command string, args ...string) *exec.Cmd {
 	cmd, err := Cmd(command, args...)
 	if err != nil {
-		panic(ex.New(err, ex.OptMessagef("looking for: %s", command)))
+		panic(err)
 	}
 	return cmd
 }
@@ -76,7 +74,7 @@ func MustCmd(command string, args ...string) *exec.Cmd {
 func Cmd(command string, args ...string) (*exec.Cmd, error) {
 	absoluteCommand, err := exec.LookPath(command)
 	if err != nil {
-		return nil, ex.New(err, ex.OptMessagef("looking for: %s", command))
+		return nil, err
 	}
 	cmd := exec.Command(absoluteCommand, args...)
 	cmd.Env = os.Environ()
@@ -87,7 +85,7 @@ func Cmd(command string, args ...string) (*exec.Cmd, error) {
 func CmdContext(ctx context.Context, command string, args ...string) (*exec.Cmd, error) {
 	absoluteCommand, err := exec.LookPath(command)
 	if err != nil {
-		return nil, ex.New(err, ex.OptMessagef("looking for: %s", command))
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, absoluteCommand, args...)
 	cmd.Env = os.Environ()

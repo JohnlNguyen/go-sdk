@@ -1,15 +1,10 @@
 package web
 
-import (
-	"net/http"
-	"time"
-
-	"github.com/blend/go-sdk/webutil"
-)
+import "time"
 
 const (
 	// PackageName is the full name of this package.
-	PackageName = "github.com/blend/go-sdk/web"
+	PackageName = "go-sdk/web"
 
 	// HeaderAllow is a common header.
 	HeaderAllow = "Allow"
@@ -69,7 +64,7 @@ const (
 	HeaderUserAgent = "User-Agent"
 
 	// HeaderVary is the "Vary" header.
-	// It is used to indicate what fields should not be used by the client as cache keys.
+	// It is used to indicate what fields should be used by the client as cache keys.
 	HeaderVary = "Vary"
 
 	// HeaderXServedBy is the "X-Served-By" header.
@@ -116,18 +111,6 @@ const (
 	ContentEncodingIdentity = "identity"
 	// ContentEncodingGZIP is the gzip (compressed) content encoding.
 	ContentEncodingGZIP = "gzip"
-)
-
-// AuthManagerMode is an auth manager mode.
-type AuthManagerMode string
-
-const (
-	// AuthManagerModeJWT is the jwt auth mode.
-	AuthManagerModeJWT AuthManagerMode = "jwt"
-	// AuthManagerModeRemote is the remote (i.e. database) managed auth mode.
-	AuthManagerModeRemote AuthManagerMode = "remote"
-	// AuthManagerModeLocal is the local map cache auth mode.
-	AuthManagerModeLocal AuthManagerMode = "local"
 )
 
 const (
@@ -211,10 +194,10 @@ const (
 	DefaultBindAddr = ":8080"
 	// DefaultHealthzBindAddr is the default healthz bind address.
 	DefaultHealthzBindAddr = ":8081"
-	// DefaultMockBindAddr is a bind address used for integration testing.
-	DefaultMockBindAddr = "127.0.0.1:0"
-	// DefaultSkipRedirectTrailingSlash is the default if we should redirect for missing trailing slashes.
-	DefaultSkipRedirectTrailingSlash = false
+	// DefaultIntegrationBindAddr is a bind address used for integration testing.
+	DefaultIntegrationBindAddr = "127.0.0.1:0"
+	// DefaultRedirectTrailingSlash is the default if we should redirect for missing trailing slashes.
+	DefaultRedirectTrailingSlash = true
 	// DefaultHandleOptions is a default.
 	DefaultHandleOptions = false
 	// DefaultHandleMethodNotAllowed is a default.
@@ -222,6 +205,14 @@ const (
 	// DefaultRecoverPanics returns if we should recover panics by default.
 	DefaultRecoverPanics = true
 
+	// DefaultHSTS is the default for if hsts is enabled.
+	DefaultHSTS = true
+	// DefaultHSTSMaxAgeSeconds is the default hsts max age seconds.
+	DefaultHSTSMaxAgeSeconds = 31536000
+	// DefaultHSTSIncludeSubDomains is a default.
+	DefaultHSTSIncludeSubDomains = true
+	// DefaultHSTSPreload is a default.
+	DefaultHSTSPreload = true
 	// DefaultMaxHeaderBytes is a default that is unset.
 	DefaultMaxHeaderBytes = 0
 	// DefaultReadTimeout is a default.
@@ -238,12 +229,6 @@ const (
 	DefaultSecureCookieName = "SSID"
 	// DefaultCookiePath is the default cookie path.
 	DefaultCookiePath = "/"
-	// DefaultCookieSecure returns what the default value for the `Secure` bit of issued cookies will be.
-	DefaultCookieSecure = true
-	// DefaultCookieHTTPOnly returns what the default value for the `HTTPOnly` bit of issued cookies will be.
-	DefaultCookieHTTPOnly = true
-	// DefaultCookieSameSite returns what the default value for the `SameSite` bit of issued cookies will be.
-	DefaultCookieSameSite = webutil.SameSiteDefault
 	// DefaultSessionTimeout is the default absolute timeout for a session (24 hours as a sane default).
 	DefaultSessionTimeout time.Duration = 24 * time.Hour
 	// DefaultUseSessionCache is the default if we should use the auth manager session cache.
@@ -265,8 +250,9 @@ const (
 )
 
 // DefaultHeaders are the default headers added by go-web.
-var DefaultHeaders = http.Header{
-	HeaderServer: []string{PackageName},
+var DefaultHeaders = map[string]string{
+	HeaderServer:    PackageName,
+	HeaderXServedBy: PackageName,
 }
 
 // SessionLockPolicy is a lock policy.
@@ -281,6 +267,14 @@ const (
 
 	// SessionReadWriteLock is a lock policy that acquires both a read and a write lock on session.
 	SessionReadWriteLock SessionLockPolicy = 2
+)
+
+const (
+	// PostBodySize is the maximum post body size we will typically consume.
+	PostBodySize = int64(1 << 26) //64mb
+
+	// PostBodySizeMax is the absolute maximum file size the server can handle.
+	PostBodySizeMax = int64(1 << 32) //enormous.
 )
 
 const (

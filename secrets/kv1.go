@@ -17,7 +17,7 @@ type KV1 struct {
 }
 
 // Put puts a value.
-func (kv1 KV1) Put(ctx context.Context, key string, data Values, options ...RequestOption) error {
+func (kv1 KV1) Put(ctx context.Context, key string, data Values, options ...Option) error {
 	contents, err := kv1.Client.jsonBody(data)
 	if err != nil {
 		return err
@@ -33,7 +33,7 @@ func (kv1 KV1) Put(ctx context.Context, key string, data Values, options ...Requ
 }
 
 // Get gets a value at a given key.
-func (kv1 KV1) Get(ctx context.Context, key string, options ...RequestOption) (Values, error) {
+func (kv1 KV1) Get(ctx context.Context, key string, options ...Option) (Values, error) {
 	req := kv1.Client.createRequest(MethodGet, filepath.Join("/v1/", key), options...).WithContext(ctx)
 	res, err := kv1.Client.send(req)
 	if err != nil {
@@ -49,7 +49,7 @@ func (kv1 KV1) Get(ctx context.Context, key string, options ...RequestOption) (V
 }
 
 // Delete puts a key.
-func (kv1 KV1) Delete(ctx context.Context, key string, options ...RequestOption) error {
+func (kv1 KV1) Delete(ctx context.Context, key string, options ...Option) error {
 	req := kv1.Client.createRequest(MethodDelete, filepath.Join("/v1/", key), options...).WithContext(ctx)
 	res, err := kv1.Client.send(req)
 	if err != nil {
@@ -60,7 +60,7 @@ func (kv1 KV1) Delete(ctx context.Context, key string, options ...RequestOption)
 }
 
 // List returns a slice of key and subfolder names at this path.
-func (kv1 KV1) List(ctx context.Context, path string, options ...RequestOption) ([]string, error) {
+func (kv1 KV1) List(ctx context.Context, path string, options ...Option) ([]string, error) {
 	req := kv1.Client.createRequest(MethodList, filepath.Join("/v1/", path), options...).WithContext(ctx)
 	res, err := kv1.Client.send(req)
 	if err != nil {

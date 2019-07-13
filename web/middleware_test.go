@@ -4,27 +4,27 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/assert"
+	"go-sdk/webutil"
 )
 
 func TestDefaultProviderMiddlewares(t *testing.T) {
 	assert := assert.New(t)
 
 	r := applyMiddleware(JSONProviderAsDefault)
-	_, ok := r.DefaultProvider.(JSONResultProvider)
+	_, ok := r.DefaultResultProvider().(JSONResultProvider)
 	assert.True(ok)
 
 	r = applyMiddleware(ViewProviderAsDefault)
-	_, ok = r.DefaultProvider.(*ViewCache)
+	_, ok = r.DefaultResultProvider().(*ViewCache)
 	assert.True(ok)
 
 	r = applyMiddleware(XMLProviderAsDefault)
-	_, ok = r.DefaultProvider.(XMLResultProvider)
+	_, ok = r.DefaultResultProvider().(XMLResultProvider)
 	assert.True(ok)
 
 	r = applyMiddleware(TextProviderAsDefault)
-	_, ok = r.DefaultProvider.(TextResultProvider)
+	_, ok = r.DefaultResultProvider().(TextResultProvider)
 	assert.True(ok)
 }
 

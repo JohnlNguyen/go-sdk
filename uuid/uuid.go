@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/blend/go-sdk/ex"
+	"go-sdk/exception"
 )
 
 var (
@@ -25,7 +25,7 @@ var (
 
 // ErrInvalidScanSource is an error returned by scan.
 const (
-	ErrInvalidScanSource ex.Class = "uuid: invalid scan source"
+	ErrInvalidScanSource exception.Class = "uuid: invalid scan source"
 )
 
 // Empty returns an empty uuid block.
@@ -201,7 +201,7 @@ func (uuid *UUID) Scan(src interface{}) error {
 	case []byte:
 		return ParseExisting(uuid, string(src.([]byte)))
 	}
-	return ex.New(ErrInvalidScanSource, ex.OptMessagef("scan type: %T", src))
+	return exception.New(ErrInvalidScanSource).WithMessagef("scan type: %T", src)
 }
 
 // Value returns a sql driver value.

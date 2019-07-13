@@ -1,77 +1,80 @@
 package logger
 
-import (
-	"time"
-
-	"github.com/blend/go-sdk/ansi"
-)
+import "time"
 
 // these are compile time assertions
 var (
-	_ Event = (*EventMeta)(nil)
+	_ Event            = &EventMeta{}
+	_ EventHeadings    = &EventMeta{}
+	_ EventLabels      = &EventMeta{}
+	_ EventAnnotations = &EventMeta{}
 )
 
 // NewEventMeta returns a new event meta.
-func NewEventMeta(flag string, options ...EventMetaOption) *EventMeta {
-	em := &EventMeta{
-		Flag:      flag,
-		Timestamp: time.Now().UTC(),
+func NewEventMeta(flag Flag) *EventMeta {
+	return &EventMeta{
+		flag:        flag,
+		ts:          time.Now().UTC(),
+		labels:      make(map[string]string),
+		annotations: make(map[string]string),
 	}
-	for _, option := range options {
-		option(em)
-	}
-	return em
-}
-
-// EventMetaOption is an option for event metas.
-type EventMetaOption func(*EventMeta)
-
-// OptEventMetaFlag sets the event flag.
-func OptEventMetaFlag(flag string) EventMetaOption {
-	return func(em *EventMeta) { em.Flag = flag }
-}
-
-// OptEventMetaTimestamp sets the event timestamp.
-func OptEventMetaTimestamp(ts time.Time) EventMetaOption {
-	return func(em *EventMeta) { em.Timestamp = ts }
-}
-
-// OptEventMetaFlagColor sets the event flag color.
-func OptEventMetaFlagColor(color ansi.Color) EventMetaOption {
-	return func(em *EventMeta) { em.FlagColor = color }
 }
 
 // EventMeta is the metadata common to events.
-// It is useful for ensuring you have the minimum required fields on your events, and its typically embedded in types.
 type EventMeta struct {
-	Labels
-	Annotations
-
-	Flag      string
-	Timestamp time.Time
-	FlagColor ansi.Color
+	flag          Flag
+	flagTextColor AnsiColor
+	ts            time.Time
+	headings      []string
+	entity        string
+	labels        map[string]string
+	annotations   map[string]string
 }
 
-// GetLabels returns the labels.
-func (em EventMeta) GetLabels() Labels { return em.Labels }
+// Headings returns the event meta headings.
+func (em *EventMeta) Headings() []string { return em.headings }
 
-// GetAnnotations returns the annotations.
-func (em EventMeta) GetAnnotations() Annotations { return em.Annotations }
+// SetHeadings sets the event meta headings.
+func (em *EventMeta) SetHeadings(headings ...string) { em.headings = headings }
 
-// GetFlag returns the event flag.
-func (em EventMeta) GetFlag() string { return em.Flag }
+// Flag returnst the event meta flag.
+func (em *EventMeta) Flag() Flag { return em.flag }
 
-// GetTimestamp returns the event timestamp.
-func (em EventMeta) GetTimestamp() time.Time { return em.Timestamp }
+// SetFlag sets the flag.
+func (em *EventMeta) SetFlag(flag Flag) { em.flag = flag }
 
-// GetFlagColor returns the event flag color
-func (em EventMeta) GetFlagColor() ansi.Color { return em.FlagColor }
+// FlagTextColor returns a custom color for the flag.
+func (em *EventMeta) FlagTextColor() AnsiColor { return em.flagTextColor }
 
-// Decompose decomposes the object into a map[string]interface{}.
-func (em EventMeta) Decompose() map[string]interface{} {
-	output := map[string]interface{}{
-		FieldFlag:      em.Flag,
-		FieldTimestamp: em.Timestamp.Format(time.RFC3339Nano),
-	}
-	return output
-}
+// SetFlagTextColor sets the flag text color.
+func (em *EventMeta) SetFlagTextColor(color AnsiColor) { em.flagTextColor = color }
+
+// Timestamp returnst the event meta timestamp.
+func (em *EventMeta) Timestamp() time.Time { return em.ts }
+
+// SetTimestamp sets the timestamp.
+func (em *EventMeta) SetTimestamp(ts time.Time) { em.ts = ts }
+
+// AddLabelValue adds a label value
+func (em *EventMeta) AddLabelValue(key, value string) { em.labels[key] = value }
+
+// SetLabels sets the labels collection.
+func (em *EventMeta) SetLabels(labels map[string]string) { em.labels = labels }
+
+// Labels returns the event labels.
+func (em *EventMeta) Labels() map[string]string { return em.labels }
+
+// AddAnnotationValue adds an annotation value
+func (em *EventMeta) AddAnnotationValue(key, value string) { em.annotations[key] = value }
+
+// SetAnnotations sets the annotations collection.
+func (em *EventMeta) SetAnnotations(annotations map[string]string) { em.annotations = annotations }
+
+// Annotations returns the event annotations.
+func (em *EventMeta) Annotations() map[string]string { return em.annotations }
+
+// SetEntity sets the entity value.
+func (em *EventMeta) SetEntity(value string) { em.entity = value }
+
+// Entity returns an entity value.
+func (em *EventMeta) Entity() string { return em.entity }

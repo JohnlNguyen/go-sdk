@@ -1,10 +1,10 @@
 package secrets
 
-import "github.com/blend/go-sdk/ex"
+import "go-sdk/exception"
 
 // Common error codes.
 const (
-	ErrNotFound     ex.Class = "secrets; not found"
-	ErrUnauthorized ex.Class = "secrets; not authorized"
-	ErrServerError  ex.Class = "secrets; remote error"
+	ErrNotFound     exception.Class = "secrets; not found"
+	ErrUnauthorized exception.Class = "secrets; not authorized"
+	ErrServerError  exception.Class = "secrets; remote error"
 )

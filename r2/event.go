@@ -1,26 +1,24 @@
 package r2
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/blend/go-sdk/logger"
-	"github.com/blend/go-sdk/webutil"
+	"go-sdk/logger"
 )
 
 const (
 	// Flag is a logger event flag.
-	Flag = "http.client.request"
+	Flag logger.Flag = "request"
 	// FlagResponse is a logger event flag.
-	FlagResponse = "http.client.response"
+	FlagResponse logger.Flag = "request.response"
 )
 
 // NewEvent returns a new event.
-func NewEvent(flag string, options ...EventOption) *Event {
+func NewEvent(flag logger.Flag, options ...EventOption) *Event {
 	e := &Event{
 		EventMeta: logger.NewEventMeta(flag),
 	}
@@ -46,66 +44,45 @@ type Event struct {
 }
 
 // WriteText writes the event to a text writer.
-func (e *Event) WriteText(tf logger.TextFormatter, wr io.Writer) {
+func (e *Event) WriteText(tf logger.TextFormatter, buf *bytes.Buffer) {
 	if e.Request != nil && e.Response != nil {
-		io.WriteString(wr, fmt.Sprintf("%s %s %s (%v)", e.Request.Method, e.Request.URL.String(), logger.ColorizeStatusCodeWithFormatter(tf, e.Response.StatusCode), e.GetTimestamp().Sub(e.Started)))
+		buf.WriteString(fmt.Sprintf("%s %s %s (%v)", e.Request.Method, e.Request.URL.String(), tf.ColorizeStatusCode(e.Response.StatusCode), e.Timestamp().Sub(e.Started)))
 	} else if e.Request != nil {
-		io.WriteString(wr, fmt.Sprintf("%s %s", e.Request.Method, e.Request.URL.String()))
+		buf.WriteString(fmt.Sprintf("%s %s", e.Request.Method, e.Request.URL.String()))
 	}
 	if e.Body != nil {
-		io.WriteString(wr, logger.Newline)
-		io.WriteString(wr, string(e.Body))
+		buf.WriteRune(logger.RuneNewline)
+		buf.Write(e.Body)
 	}
 }
 
-// MarshalJSON implements json.Marshaler.
-func (e *Event) MarshalJSON() ([]byte, error) {
-	output := make(map[string]interface{})
+// WriteJSON implements logger.JSONWritable.
+func (e *Event) WriteJSON() logger.JSONObj {
+	output := logger.JSONObj{}
 	if e.Request != nil {
-		var url string
-		if e.Request.URL != nil {
-			url = e.Request.URL.String()
-		}
-		output["req"] = map[string]interface{}{
+		output["req"] = logger.JSONObj{
 			"startTime": e.Started,
 			"method":    e.Request.Method,
-			"url":       url,
+			"url":       e.Request.URL.String(),
 			"headers":   e.Request.Header,
 		}
 	}
 	if e.Response != nil {
-		output["res"] = map[string]interface{}{
-			"completeTime":    e.GetTimestamp(),
+		output["res"] = logger.JSONObj{
+			"completeTime":    e.Timestamp(),
 			"statusCode":      e.Response.StatusCode,
 			"contentLength":   e.Response.ContentLength,
 			"contentType":     tryHeader(e.Response.Header, "Content-Type", "content-type"),
 			"contentEncoding": tryHeader(e.Response.Header, "Content-Encoding", "content-encoding"),
 			"headers":         e.Response.Header,
-			"cert":            webutil.ParseCertInfo(e.Response),
+			"cert":            ParseCertInfo(e.Response),
 		}
 	}
 	if e.Body != nil {
 		output["body"] = string(e.Body)
 	}
 
-	return json.Marshal(logger.MergeDecomposed(e.EventMeta.Decompose(), output))
-}
-
-// EventJSONSchema is the json schema of the logger event.
-type EventJSONSchema struct {
-	Req struct {
-		StartTime time.Time           `json:"startTime"`
-		Method    string              `json:"method"`
-		URL       string              `json:"url"`
-		Headers   map[string][]string `json:"headers"`
-	} `json:"req"`
-	Res struct {
-		CompleteTime  time.Time           `json:"completeTime"`
-		StatusCode    int                 `json:"statusCode"`
-		ContentLength int                 `json:"contentLength"`
-		Headers       map[string][]string `json:"headers"`
-	} `json:"res"`
-	Body string `json:"body"`
+	return output
 }
 
 func tryHeader(headers http.Header, keys ...string) string {

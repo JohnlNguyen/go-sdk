@@ -1,48 +1,34 @@
 package jobkit
 
 import (
-	"github.com/blend/go-sdk/airbrake"
-	"github.com/blend/go-sdk/aws"
-	"github.com/blend/go-sdk/configutil"
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/datadog"
-	"github.com/blend/go-sdk/email"
-	"github.com/blend/go-sdk/logger"
-	"github.com/blend/go-sdk/slack"
-	"github.com/blend/go-sdk/web"
+	"go-sdk/airbrake"
+	"go-sdk/aws"
+	"go-sdk/configutil"
+	"go-sdk/cron"
+	"go-sdk/datadog"
+	"go-sdk/email"
+	"go-sdk/logger"
+	"go-sdk/slack"
+	"go-sdk/web"
 )
 
 // Config is the jobkit config.
 type Config struct {
-	MaxLogBytes int             `yaml:"maxLogBytes"`
-	Cron        cron.Config     `yaml:"cron"`
-	Logger      logger.Config   `yaml:"logger"`
-	Web         web.Config      `yaml:"web"`
-	Airbrake    airbrake.Config `yaml:"airbrake"`
-	AWS         aws.Config      `yaml:"aws"`
-	Email       email.Message   `yaml:"email"`
-	Datadog     datadog.Config  `yaml:"datadog"`
-	Slack       slack.Config    `yaml:"slack"`
-}
+	cron.Config `json:",inline" yaml:",inline"`
 
-// Resolve applies resolution steps to the config.
-func (c *Config) Resolve() error {
-	return configutil.AnyError(
-		c.Cron.Resolve(),
-		c.Logger.Resolve(),
-		c.Web.Resolve(),
-		c.Airbrake.Resolve(),
-		c.AWS.Resolve(),
-		c.Email.Resolve(),
-		c.Datadog.Resolve(),
-		c.Slack.Resolve(),
-	)
+	MaxLogBytes int `json:"maxLogBytes" yaml:"maxLogBytes"`
+
+	Logger logger.Config `json:"logger" yaml:"logger"`
+	Web    web.Config    `json:"web" yaml:"web"`
+
+	Airbrake airbrake.Config `json:"airbrake" yaml:"airbrake"`
+	AWS      aws.Config      `json:"aws" yaml:"aws"`
+	Email    email.Message   `json:"email" yaml:"email"`
+	Datadog  datadog.Config  `json:"datadog" yaml:"datadog"`
+	Slack    slack.Config    `json:"slack" yaml:"slack"`
 }
 
 // MaxLogBytesOrDefault is a the maximum amount of log data to buffer.
 func (c Config) MaxLogBytesOrDefault() int {
-	if c.MaxLogBytes > 0 {
-		return c.MaxLogBytes
-	}
-	return DefaultMaxLogBytes
+	return configutil.CoalesceInt(c.MaxLogBytes, DefaultMaxLogBytes)
 }

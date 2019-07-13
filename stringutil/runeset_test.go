@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestRunesetSort(t *testing.T) {

@@ -36,18 +36,6 @@ var (
 	HeaderStrictTransportSecurity = http.CanonicalHeaderKey("Strict-Transport-Security")
 )
 
-/*
-SameSite prevents the browser from sending this cookie along with cross-site requests.
-The main goal is mitigate the risk of cross-origin information leakage.
-It also provides some protection against cross-site request forgery attacks.
-Possible values for the flag are "lax", "strict" or "default".
-*/
-const (
-	SameSiteStrict  = "strict"
-	SameSiteLax     = "lax"
-	SameSiteDefault = "default"
-)
-
 var (
 	// Allows for a sub-match of the first value after 'for=' to the next
 	// comma, semi-colon or space. The match is case-insensitive.
@@ -68,15 +56,6 @@ const (
 	// ContentTypeApplicationJSON is a content type for JSON responses.
 	// We specify chartset=utf-8 so that clients know to use the UTF-8 string encoding.
 	ContentTypeApplicationJSON = "application/json; charset=UTF-8"
-
-	// ContentTypeApplicationXML is a content type header value.
-	ContentTypeApplicationXML = "application/xml"
-
-	// ContentTypeApplicationFormEncoded is a content type header value.
-	ContentTypeApplicationFormEncoded = "application/x-www-form-urlencoded"
-
-	// ContentTypeApplicationOctetStream is a content type header value.
-	ContentTypeApplicationOctetStream = "application/octet-stream"
 
 	// ContentTypeHTML is a content type for html responses.
 	// We specify chartset=utf-8 so that clients know to use the UTF-8 string encoding.

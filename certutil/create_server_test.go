@@ -3,21 +3,18 @@ package certutil
 import (
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestCreateServer(t *testing.T) {
 	assert := assert.New(t)
 
-	authority, err := CreateCertificateAuthority()
+	ca, err := CreateCA()
 	assert.Nil(err)
 
-	assert.Len(authority.CertificateDERs, 1)
-	assert.Len(authority.Certificates, 1)
-
-	server, err := CreateServer("warden-server", authority, OptDNSNames("warden-server-test"))
+	server, err := CreateServer("warden-server", ca, OptAdditionalNames("warden-server-test"))
 	assert.Nil(err)
 	assert.Len(server.Certificates, 2)
 	assert.Len(server.CertificateDERs, 2)
-	assert.Len(server.Certificates[0].DNSNames, 1)
+	assert.Len(server.Certificates[0].DNSNames, 2)
 }

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/cron"
-	"github.com/blend/go-sdk/logger"
+	"go-sdk/assert"
+	"go-sdk/cron"
+	"go-sdk/logger"
 )
 
 func TestLoggingDebugf(t *testing.T) {
@@ -26,12 +26,13 @@ func TestLoggingDebugf(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Debug, "check-listener", logger.NewMessageEventListener(func(_ context.Context, me *logger.MessageEvent) {
-		defer close(triggered)
-		message = me.Message
+	log.Listen(logger.Debug, "check-listener", logger.NewMessageEventListener(func(me *logger.MessageEvent) {
+		defer func() { close(triggered) }()
+		message = me.String()
 	}))
 
 	Debugf(ctx, log, "foo %s", "bar")
+
 	<-triggered
 	assert.Equal("foo bar", message)
 }
@@ -52,9 +53,9 @@ func TestLoggingInfof(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Info, "check-listener", logger.NewMessageEventListener(func(_ context.Context, me *logger.MessageEvent) {
+	log.Listen(logger.Info, "check-listener", logger.NewMessageEventListener(func(me *logger.MessageEvent) {
 		defer func() { close(triggered) }()
-		message = me.Message
+		message = me.String()
 	}))
 
 	Infof(ctx, log, "foo %s", "bar")
@@ -79,9 +80,9 @@ func TestLoggingWarningf(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Warning, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Warning, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Warningf(ctx, log, "foo %s", "bar")
@@ -106,9 +107,9 @@ func TestLoggingWarning(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Warning, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Warning, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Warning(ctx, log, fmt.Errorf("foo %s", "bar"))
@@ -133,9 +134,9 @@ func TestLoggingErrorf(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Error, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Error, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Errorf(ctx, log, "foo %s", "bar")
@@ -160,9 +161,9 @@ func TestLoggingError(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Error, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Error, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Error(ctx, log, fmt.Errorf("foo %s", "bar"))
@@ -187,9 +188,9 @@ func TestLoggingFatalf(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Fatal, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Fatal, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Fatalf(ctx, log, "foo %s", "bar")
@@ -214,9 +215,9 @@ func TestLoggingFatal(t *testing.T) {
 	defer log.Close()
 
 	var message string
-	log.Listen(logger.Fatal, "check-listener", logger.NewErrorEventListener(func(_ context.Context, ee *logger.ErrorEvent) {
+	log.Listen(logger.Fatal, "check-listener", logger.NewErrorEventListener(func(ee *logger.ErrorEvent) {
 		defer func() { close(triggered) }()
-		message = ee.Err.Error()
+		message = ee.Err().Error()
 	}))
 
 	Fatal(ctx, log, fmt.Errorf("foo %s", "bar"))

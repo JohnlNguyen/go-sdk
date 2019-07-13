@@ -1,178 +1,244 @@
 package logger
 
 import (
-	"context"
-	"encoding/json"
+	"bytes"
 	"fmt"
-	"io"
 	"strings"
-
-	"github.com/blend/go-sdk/ansi"
+	"time"
 )
 
 // these are compile time assertions
 var (
-	_ Event          = (*AuditEvent)(nil)
-	_ TextWritable   = (*AuditEvent)(nil)
-	_ json.Marshaler = (*AuditEvent)(nil)
+	_ Event            = &AuditEvent{}
+	_ EventHeadings    = &AuditEvent{}
+	_ EventLabels      = &AuditEvent{}
+	_ EventAnnotations = &AuditEvent{}
 )
 
 // NewAuditEvent returns a new audit event.
-func NewAuditEvent(principal, verb string, options ...AuditEventOption) *AuditEvent {
-	ae := &AuditEvent{
+func NewAuditEvent(principal, verb string) *AuditEvent {
+	return &AuditEvent{
 		EventMeta: NewEventMeta(Audit),
-		Principal: principal,
-		Verb:      verb,
+		principal: principal,
+		verb:      verb,
 	}
-	for _, option := range options {
-		option(ae)
-	}
-	return ae
 }
 
 // NewAuditEventListener returns a new audit event listener.
-func NewAuditEventListener(listener func(context.Context, *AuditEvent)) Listener {
-	return func(ctx context.Context, e Event) {
+func NewAuditEventListener(listener func(me *AuditEvent)) Listener {
+	return func(e Event) {
 		if typed, isTyped := e.(*AuditEvent); isTyped {
-			listener(ctx, typed)
+			listener(typed)
 		}
 	}
-}
-
-// AuditEventOption is an option for AuditEvents.
-type AuditEventOption func(*AuditEvent)
-
-// OptAuditMetaOptions sets options on the event metadata.
-func OptAuditMetaOptions(options ...EventMetaOption) AuditEventOption {
-	return func(ae *AuditEvent) {
-		for _, option := range options {
-			option(ae.EventMeta)
-		}
-	}
-}
-
-// OptAuditContext sets a field on an AuditEvent.
-func OptAuditContext(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Context = value }
-}
-
-// OptAuditPrincipal sets a field on an AuditEvent.
-func OptAuditPrincipal(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Principal = value }
-}
-
-// OptAuditVerb sets a field on an AuditEvent.
-func OptAuditVerb(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Verb = value }
-}
-
-// OptAuditNoun sets a field on an AuditEvent.
-func OptAuditNoun(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Noun = value }
-}
-
-// OptAuditSubject sets a field on an AuditEvent.
-func OptAuditSubject(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Subject = value }
-}
-
-// OptAuditProperty sets a field on an AuditEvent.
-func OptAuditProperty(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Property = value }
-}
-
-// OptAuditRemoteAddress sets a field on an AuditEvent.
-func OptAuditRemoteAddress(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.RemoteAddress = value }
-}
-
-// OptAuditUserAgent sets a field on an AuditEvent.
-func OptAuditUserAgent(value string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.UserAgent = value }
-}
-
-// OptAuditExtra sets a field on an AuditEvent.
-func OptAuditExtra(values map[string]string) AuditEventOption {
-	return func(ae *AuditEvent) { ae.Extra = values }
 }
 
 // AuditEvent is a common type of event detailing a business action by a subject.
 type AuditEvent struct {
 	*EventMeta
 
-	Context       string
-	Principal     string
-	Verb          string
-	Noun          string
-	Subject       string
-	Property      string
-	RemoteAddress string
-	UserAgent     string
-	Extra         map[string]string
+	context       string
+	principal     string
+	verb          string
+	noun          string
+	subject       string
+	property      string
+	remoteAddress string
+	userAgent     string
+	extra         map[string]string
+}
+
+// WithHeadings sets the headings.
+func (e *AuditEvent) WithHeadings(headings ...string) *AuditEvent {
+	e.headings = headings
+	return e
+}
+
+// WithLabel sets a label on the event for later filtering.
+func (e *AuditEvent) WithLabel(key, value string) *AuditEvent {
+	e.AddLabelValue(key, value)
+	return e
+}
+
+// WithAnnotation adds an annotation to the event.
+func (e *AuditEvent) WithAnnotation(key, value string) *AuditEvent {
+	e.AddAnnotationValue(key, value)
+	return e
+}
+
+// WithFlag sets the audit event flag
+func (e *AuditEvent) WithFlag(f Flag) *AuditEvent {
+	e.flag = f
+	return e
+}
+
+// WithTimestamp sets the message timestamp.
+func (e *AuditEvent) WithTimestamp(ts time.Time) *AuditEvent {
+	e.ts = ts
+	return e
+}
+
+// WithContext sets the context.
+func (e *AuditEvent) WithContext(context string) *AuditEvent {
+	e.context = context
+	return e
+}
+
+// Context returns the audit context.
+func (e *AuditEvent) Context() string {
+	return e.context
+}
+
+// WithPrincipal sets the principal.
+func (e *AuditEvent) WithPrincipal(principal string) *AuditEvent {
+	e.principal = principal
+	return e
+}
+
+// Principal returns the principal.
+func (e AuditEvent) Principal() string {
+	return e.principal
+}
+
+// WithVerb sets the verb.
+func (e *AuditEvent) WithVerb(verb string) *AuditEvent {
+	e.verb = verb
+	return e
+}
+
+// Verb returns the verb.
+func (e AuditEvent) Verb() string {
+	return e.verb
+}
+
+// WithNoun sets the noun.
+func (e *AuditEvent) WithNoun(noun string) *AuditEvent {
+	e.noun = noun
+	return e
+}
+
+// Noun returns the noun.
+func (e AuditEvent) Noun() string {
+	return e.noun
+}
+
+// WithSubject sets the subject.
+func (e *AuditEvent) WithSubject(subject string) *AuditEvent {
+	e.subject = subject
+	return e
+}
+
+// Subject returns the subject.
+func (e AuditEvent) Subject() string {
+	return e.subject
+}
+
+// WithProperty sets the property.
+func (e *AuditEvent) WithProperty(property string) *AuditEvent {
+	e.property = property
+	return e
+}
+
+// Property returns the property.
+func (e AuditEvent) Property() string {
+	return e.property
+}
+
+// WithRemoteAddress sets the remote address.
+func (e *AuditEvent) WithRemoteAddress(remoteAddr string) *AuditEvent {
+	e.remoteAddress = remoteAddr
+	return e
+}
+
+// RemoteAddress returns the remote address.
+func (e AuditEvent) RemoteAddress() string {
+	return e.remoteAddress
+}
+
+// WithUserAgent sets the user agent.
+func (e *AuditEvent) WithUserAgent(userAgent string) *AuditEvent {
+	e.userAgent = userAgent
+	return e
+}
+
+// UserAgent returns the user agent.
+func (e AuditEvent) UserAgent() string {
+	return e.userAgent
+}
+
+// WithExtra sets the extra info.
+func (e *AuditEvent) WithExtra(extra map[string]string) *AuditEvent {
+	e.extra = extra
+	return e
+}
+
+// Extra returns the extra information.
+func (e AuditEvent) Extra() map[string]string {
+	return e.extra
 }
 
 // WriteText implements TextWritable.
-func (e AuditEvent) WriteText(formatter TextFormatter, wr io.Writer) {
-	if len(e.Context) > 0 {
-		io.WriteString(wr, formatter.Colorize("Context:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Context)
-		io.WriteString(wr, Space)
+func (e AuditEvent) WriteText(formatter TextFormatter, buf *bytes.Buffer) {
+	if len(e.context) > 0 {
+		buf.WriteString(formatter.Colorize("Context:", ColorGray))
+		buf.WriteString(e.context)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Principal) > 0 {
-		io.WriteString(wr, formatter.Colorize("Principal:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Principal)
-		io.WriteString(wr, Space)
+	if len(e.principal) > 0 {
+		buf.WriteString(formatter.Colorize("Principal:", ColorGray))
+		buf.WriteString(e.principal)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Verb) > 0 {
-		io.WriteString(wr, formatter.Colorize("Verb:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Verb)
-		io.WriteString(wr, Space)
+	if len(e.verb) > 0 {
+		buf.WriteString(formatter.Colorize("Verb:", ColorGray))
+		buf.WriteString(e.verb)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Noun) > 0 {
-		io.WriteString(wr, formatter.Colorize("Noun:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Noun)
-		io.WriteString(wr, Space)
+	if len(e.noun) > 0 {
+		buf.WriteString(formatter.Colorize("Noun:", ColorGray))
+		buf.WriteString(e.noun)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Subject) > 0 {
-		io.WriteString(wr, formatter.Colorize("Subject:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Subject)
-		io.WriteString(wr, Space)
+	if len(e.subject) > 0 {
+		buf.WriteString(formatter.Colorize("Subject:", ColorGray))
+		buf.WriteString(e.subject)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Property) > 0 {
-		io.WriteString(wr, formatter.Colorize("Property:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.Property)
-		io.WriteString(wr, Space)
+	if len(e.property) > 0 {
+		buf.WriteString(formatter.Colorize("Property:", ColorGray))
+		buf.WriteString(e.property)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.RemoteAddress) > 0 {
-		io.WriteString(wr, formatter.Colorize("Remote Addr:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.RemoteAddress)
-		io.WriteString(wr, Space)
+	if len(e.remoteAddress) > 0 {
+		buf.WriteString(formatter.Colorize("Remote Addr:", ColorGray))
+		buf.WriteString(e.remoteAddress)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.UserAgent) > 0 {
-		io.WriteString(wr, formatter.Colorize("UA:", ansi.ColorLightBlack))
-		io.WriteString(wr, e.UserAgent)
-		io.WriteString(wr, Space)
+	if len(e.userAgent) > 0 {
+		buf.WriteString(formatter.Colorize("UA:", ColorGray))
+		buf.WriteString(e.userAgent)
+		buf.WriteRune(RuneSpace)
 	}
-	if len(e.Extra) > 0 {
+	if len(e.extra) > 0 {
 		var values []string
-		for key, value := range e.Extra {
-			values = append(values, fmt.Sprintf("%s%s", formatter.Colorize(key+":", ansi.ColorLightBlack), value))
+		for key, value := range e.extra {
+			values = append(values, fmt.Sprintf("%s%s", formatter.Colorize(key+":", ColorGray), value))
 		}
-		io.WriteString(wr, strings.Join(values, " "))
+		buf.WriteString(strings.Join(values, " "))
 	}
 }
 
-// MarshalJSON implements json.Marshaler.
-func (e AuditEvent) MarshalJSON() ([]byte, error) {
-	return json.Marshal(MergeDecomposed(e.EventMeta.Decompose(), map[string]interface{}{
-		"context":    e.Context,
-		"principal":  e.Principal,
-		"verb":       e.Verb,
-		"noun":       e.Noun,
-		"subject":    e.Subject,
-		"property":   e.Property,
-		"remoteAddr": e.RemoteAddress,
-		"ua":         e.UserAgent,
-		"extra":      e.Extra,
-	}))
+// WriteJSON implements JSONWritable.
+func (e AuditEvent) WriteJSON() JSONObj {
+	return JSONObj{
+		"context":    e.context,
+		"principal":  e.principal,
+		"verb":       e.verb,
+		"noun":       e.noun,
+		"subject":    e.subject,
+		"property":   e.property,
+		"remoteAddr": e.remoteAddress,
+		"ua":         e.userAgent,
+		"extra":      e.extra,
+	}
 }

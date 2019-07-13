@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestViewModelWrap(t *testing.T) {
@@ -14,13 +14,13 @@ func TestViewModelWrap(t *testing.T) {
 	controlTemplate := `{{ define "control" }}{{ if .Ctx }}{{ .ViewModel }}{{ end }}{{ end }}`
 
 	app := New()
-	app.Views.AddLiterals(indexTemplate, controlTemplate)
+	app.Views().AddLiterals(indexTemplate, controlTemplate)
 
 	app.GET("/", func(r *Ctx) Result {
-		return r.Views.View("index", []string{"foo", "bar", "baz"})
+		return r.Views().View("index", []string{"foo", "bar", "baz"})
 	})
 
-	contents, meta, err := MockGet(app, "/").BytesWithResponse()
+	contents, meta, err := app.Mock().Get("/").BytesWithMeta()
 	assert.Nil(err)
 	assert.Equal(http.StatusOK, meta.StatusCode, string(contents))
 	assert.Equal("<div>foo</div><div>bar</div><div>baz</div>", string(contents))

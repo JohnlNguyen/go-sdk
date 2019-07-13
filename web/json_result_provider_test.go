@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
+	"go-sdk/assert"
 )
 
 func TestJSONResultProvider(t *testing.T) {
@@ -18,13 +18,8 @@ func TestJSONResultProvider(t *testing.T) {
 
 	notAuthorized, ok := JSON.NotAuthorized().(*JSONResult)
 	assert.True(ok)
-	assert.Equal(http.StatusUnauthorized, notAuthorized.StatusCode)
+	assert.Equal(http.StatusForbidden, notAuthorized.StatusCode)
 	assert.Equal("Not Authorized", notAuthorized.Response)
-
-	forbidden, ok := JSON.Forbidden().(*JSONResult)
-	assert.True(ok)
-	assert.Equal(http.StatusForbidden, forbidden.StatusCode)
-	assert.Equal("Forbidden", forbidden.Response)
 
 	badRequest, ok := JSON.BadRequest(nil).(*JSONResult)
 	assert.True(ok)
@@ -53,7 +48,7 @@ func TestJSONResultProvider(t *testing.T) {
 
 	internalError := JSON.InternalError(fmt.Errorf("only a test"))
 
-	typed, ok := internalError.(*LoggedErrorResult)
+	typed, ok := internalError.(*loggedErrorResult)
 	assert.True(ok)
 	assert.Equal(fmt.Errorf("only a test"), typed.Error)
 	inner := typed.Result.(*JSONResult)

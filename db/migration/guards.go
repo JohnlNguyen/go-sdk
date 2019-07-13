@@ -5,8 +5,24 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/blend/go-sdk/db"
-	"github.com/blend/go-sdk/stringutil"
+	"go-sdk/db"
+	"go-sdk/stringutil"
+)
+
+const (
+	verbCreate = "create"
+	verbAlter  = "alter"
+	verbRun    = "run"
+
+	nounColumn     = "column"
+	nounTable      = "table"
+	nounIndex      = "index"
+	nounConstraint = "constraint"
+	nounRole       = "role"
+
+	adverbAlways    = "always"
+	adverbExists    = "exists"
+	adverbNotExists = "not exists"
 )
 
 // GuardFunc is a control for migration steps.
@@ -67,56 +83,81 @@ func IfNotExists(statement string) GuardFunc {
 	})
 }
 
-// guardPredicate wraps a predicate in a GuardFunc
-func guardPredicate(description string, p predicate, arg1 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return p(c, tx, arg1)
+// ColumnNotExistsWithPredicate creates a table on the given connection if it does not exist.
+func ColumnNotExistsWithPredicate(predicate Predicate2, tableName, columnName string) GuardFunc {
+	return Guard(fmt.Sprintf("create column `%s` on `%s`", columnName, tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return Not(predicate(c, tx, tableName, columnName))
 	})
 }
 
-// guardNotPredicate inverts a predicate, and wraps that in a GuardFunc
-func guardNotPredicate(description string, p predicate, arg1 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return Not(p(c, tx, arg1))
+// ConstraintNotExistsWithPredicate creates a table on the given connection if it does not exist.
+func ConstraintNotExistsWithPredicate(predicate Predicate, constraintName string) GuardFunc {
+	return Guard(fmt.Sprintf("create constraint `%s`", constraintName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return Not(predicate(c, tx, constraintName))
 	})
 }
 
-// guardPredicate2 wraps a predicate2 in a GuardFunc
-func guardPredicate2(description string, p predicate2, arg1, arg2 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return p(c, tx, arg1, arg2)
+// TableNotExistsWithPredicate creates a table on the given connection if it does not exist.
+func TableNotExistsWithPredicate(predicate Predicate, tableName string) GuardFunc {
+	return Guard(fmt.Sprintf("create table `%s`", tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return Not(predicate(c, tx, tableName))
 	})
 }
 
-// guardNotPredicate2 inverts a predicate2, and wraps that in a GuardFunc
-func guardNotPredicate2(description string, p predicate2, arg1, arg2 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return Not(p(c, tx, arg1, arg2))
+// IndexNotExistsWithPredicate creates a index on the given connection if it does not exist.
+func IndexNotExistsWithPredicate(predicate Predicate2, tableName, indexName string) GuardFunc {
+	return Guard(fmt.Sprintf("create index `%s` on `%s`", indexName, tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return Not(predicate(c, tx, tableName, indexName))
 	})
 }
 
-// guardPredicate3 wraps a predicate3 in a GuardFunc
-func guardPredicate3(description string, p predicate3, arg1, arg2, arg3 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return p(c, tx, arg1, arg2, arg3)
+// RoleNotExistsWithPredicate creates a new role if it doesn't exist.
+func RoleNotExistsWithPredicate(predicate Predicate, roleName string) GuardFunc {
+	return Guard(fmt.Sprintf("create role `%s`", roleName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return Not(predicate(c, tx, roleName))
 	})
 }
 
-// guardNotPredicate3 inverts a predicate3, and wraps that in a GuardFunc
-func guardNotPredicate3(description string, p predicate3, arg1, arg2, arg3 string) GuardFunc {
-	return Guard(description, func(c *db.Connection, tx *sql.Tx) (bool, error) {
-		return Not(p(c, tx, arg1, arg2, arg3))
+// ColumnExistsWithPredicate alters an existing column, erroring if it doesn't exist
+func ColumnExistsWithPredicate(predicate Predicate2, tableName, columnName string) GuardFunc {
+	return Guard(fmt.Sprintf("alter column `%s` on `%s`", columnName, tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return predicate(c, tx, tableName, columnName)
 	})
 }
 
-// predicate is a function that evaluates based on a string param.
-type predicate func(*db.Connection, *sql.Tx, string) (bool, error)
+// ConstraintExistsWithPredicate alters an existing constraint, erroring if it doesn't exist
+func ConstraintExistsWithPredicate(predicate Predicate, constraintName string) GuardFunc {
+	return Guard(fmt.Sprintf("alter constraint `%s`", constraintName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return predicate(c, tx, constraintName)
+	})
+}
 
-// predicate2 is a function that evaluates based on two string params.
-type predicate2 func(*db.Connection, *sql.Tx, string, string) (bool, error)
+// TableExistsWithPredicate alters an existing table, erroring if it doesn't exist
+func TableExistsWithPredicate(predicate Predicate, tableName string) GuardFunc {
+	return Guard(fmt.Sprintf("alter table `%s`", tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return predicate(c, tx, tableName)
+	})
+}
 
-// predicate3 is a function that evaluates based on three string params.
-type predicate3 func(*db.Connection, *sql.Tx, string, string, string) (bool, error)
+// IndexExistsWithPredicate alters an existing index, erroring if it doesn't exist
+func IndexExistsWithPredicate(predicate Predicate2, tableName, indexName string) GuardFunc {
+	return Guard(fmt.Sprintf("alter index `%s` on `%s`", indexName, tableName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return predicate(c, tx, tableName, indexName)
+	})
+}
+
+// RoleExistsWithPredicate alters an existing role in the db
+func RoleExistsWithPredicate(predicate Predicate, roleName string) GuardFunc {
+	return Guard(fmt.Sprintf("alter role `%s`", roleName), func(c *db.Connection, tx *sql.Tx) (bool, error) {
+		return predicate(c, tx, roleName)
+	})
+}
+
+// Predicate is a function that evaluates based on a string param.
+type Predicate func(*db.Connection, *sql.Tx, string) (bool, error)
+
+// Predicate2 is a function that evaluates based on two string params.
+type Predicate2 func(*db.Connection, *sql.Tx, string, string) (bool, error)
 
 // Not inverts the output of a predicate.
 func Not(proceed bool, err error) (bool, error) {
@@ -132,7 +173,7 @@ func Exists(c *db.Connection, tx *sql.Tx, selectStatement string) (bool, error) 
 	if !stringutil.HasPrefixCaseless(selectStatement, "select") {
 		return false, fmt.Errorf("statement must be a `SELECT`")
 	}
-	return c.Invoke(db.OptTx(tx)).Query(selectStatement).Any()
+	return c.QueryInTx(selectStatement, tx).Any()
 }
 
 // NotExists returns if a statement doesnt have results.
@@ -140,5 +181,5 @@ func NotExists(c *db.Connection, tx *sql.Tx, selectStatement string) (bool, erro
 	if !stringutil.HasPrefixCaseless(selectStatement, "select") {
 		return false, fmt.Errorf("statement must be a `SELECT`")
 	}
-	return c.Invoke(db.OptTx(tx)).Query(selectStatement).None()
+	return c.QueryInTx(selectStatement, tx).None()
 }

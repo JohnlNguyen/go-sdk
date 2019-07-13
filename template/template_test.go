@@ -9,9 +9,9 @@ import (
 
 	"strings"
 
-	assert "github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/env"
-	"github.com/blend/go-sdk/uuid"
+	assert "go-sdk/assert"
+	"go-sdk/env"
+	"go-sdk/uuid"
 )
 
 func TestTemplateFromFile(t *testing.T) {

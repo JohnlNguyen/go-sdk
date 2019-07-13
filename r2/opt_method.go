@@ -1,33 +1,49 @@
 package r2
 
-import "github.com/blend/go-sdk/webutil"
-
 // OptMethod sets the request method.
 func OptMethod(method string) Option {
-	return RequestOption(webutil.OptMethod(method))
+	return func(r *Request) error {
+		r.Method = method
+		return nil
+	}
 }
 
 // OptGet sets the request method.
 func OptGet() Option {
-	return RequestOption(webutil.OptGet())
+	return func(r *Request) error {
+		r.Method = "GET"
+		return nil
+	}
 }
 
 // OptPost sets the request method.
 func OptPost() Option {
-	return RequestOption(webutil.OptPost())
+	return func(r *Request) error {
+		r.Method = "POST"
+		return nil
+	}
 }
 
 // OptPut sets the request method.
 func OptPut() Option {
-	return RequestOption(webutil.OptPut())
+	return func(r *Request) error {
+		r.Method = "PUT"
+		return nil
+	}
 }
 
 // OptPatch sets the request method.
 func OptPatch() Option {
-	return RequestOption(webutil.OptPatch())
+	return func(r *Request) error {
+		r.Method = "PATCH"
+		return nil
+	}
 }
 
 // OptDelete sets the request method.
 func OptDelete() Option {
-	return RequestOption(webutil.OptDelete())
+	return func(r *Request) error {
+		r.Method = "DELETE"
+		return nil
+	}
 }

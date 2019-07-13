@@ -6,32 +6,27 @@ import (
 	awsutil "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	awsSes "github.com/aws/aws-sdk-go/service/ses"
-
-	"github.com/blend/go-sdk/email"
-	"github.com/blend/go-sdk/ex"
-)
-
-var (
-	_ Sender = (*APISender)(nil)
+	"go-sdk/email"
+	"go-sdk/exception"
 )
 
 // New returns a new sender.
 func New(session *session.Session) email.Sender {
 	return &APISender{
-		Session: session,
-		Client:  awsSes.New(session),
+		session: session,
+		client:  awsSes.New(session),
 	}
 }
 
 // APISender is an aws ses email sender.
 type APISender struct {
-	Session *session.Session
-	Client  *awsSes.SES
+	session *session.Session
+	client  *awsSes.SES
 }
 
 // Send sends a message.
 func (s *APISender) Send(ctx context.Context, m email.Message) error {
-	if s.Client == nil {
+	if s.client == nil {
 		return nil
 	}
 	if err := m.Validate(); err != nil {
@@ -67,6 +62,6 @@ func (s *APISender) Send(ctx context.Context, m email.Message) error {
 		}
 	}
 
-	_, err := s.Client.SendEmailWithContext(ctx, input)
-	return ex.New(err)
+	_, err := s.client.SendEmailWithContext(ctx, input)
+	return exception.New(err)
 }

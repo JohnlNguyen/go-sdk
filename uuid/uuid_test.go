@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/blend/go-sdk/assert"
-	"github.com/blend/go-sdk/yaml"
+	"go-sdk/assert"
+	"go-sdk/yaml"
 )
 
 func TestV4(t *testing.T) {

@@ -12,12 +12,12 @@ import (
 	"testing"
 )
 
-func printChildren(n *RouteNode, prefix string) {
-	fmt.Printf(" %02d:%02d %s%s[%d] %v %t %d \r\n", n.Priority, n.MaxParams, prefix, n.Path, len(n.Children), n.Route, n.IsWildcard, n.RouteNodeType)
-	for l := len(n.Path); l > 0; l-- {
+func printChildren(n *node, prefix string) {
+	fmt.Printf(" %02d:%02d %s%s[%d] %v %t %d \r\n", n.priority, n.maxParams, prefix, n.path, len(n.children), n.route, n.isWildcard, n.nodeType)
+	for l := len(n.path); l > 0; l-- {
 		prefix += " "
 	}
-	for _, child := range n.Children {
+	for _, child := range n.children {
 		printChildren(child, prefix)
 	}
 }
@@ -38,7 +38,7 @@ type testRequests []struct {
 	ps         RouteParameters
 }
 
-func checkRequests(t *testing.T, tree *RouteNode, requests testRequests) {
+func checkRequests(t *testing.T, tree *node, requests testRequests) {
 	for _, request := range requests {
 		route, ps, _ := tree.getValue(request.path)
 
@@ -61,42 +61,42 @@ func checkRequests(t *testing.T, tree *RouteNode, requests testRequests) {
 	}
 }
 
-func checkPriorities(t *testing.T, n *RouteNode) uint32 {
+func checkPriorities(t *testing.T, n *node) uint32 {
 	var prio uint32
-	for i := range n.Children {
-		prio += checkPriorities(t, n.Children[i])
+	for i := range n.children {
+		prio += checkPriorities(t, n.children[i])
 	}
 
-	if n.Route != nil {
+	if n.route != nil {
 		prio++
 	}
 
-	if n.Priority != prio {
+	if n.priority != prio {
 		t.Errorf(
 			"priority mismatch for node '%s': is %d, should be %d",
-			n.Path, n.Priority, prio,
+			n.path, n.priority, prio,
 		)
 	}
 
 	return prio
 }
 
-func checkMaxParams(t *testing.T, n *RouteNode) uint8 {
+func checkMaxParams(t *testing.T, n *node) uint8 {
 	var maxParams uint8
-	for i := range n.Children {
-		params := checkMaxParams(t, n.Children[i])
+	for i := range n.children {
+		params := checkMaxParams(t, n.children[i])
 		if params > maxParams {
 			maxParams = params
 		}
 	}
-	if n.RouteNodeType > RouteNodeTypeRoot && !n.IsWildcard {
+	if n.nodeType > root && !n.isWildcard {
 		maxParams++
 	}
 
-	if n.MaxParams != maxParams {
+	if n.maxParams != maxParams {
 		t.Errorf(
 			"maxParams mismatch for node '%s': is %d, should be %d",
-			n.Path, n.MaxParams, maxParams,
+			n.path, n.maxParams, maxParams,
 		)
 	}
 
@@ -113,7 +113,7 @@ func TestCountParams(t *testing.T) {
 }
 
 func TestTreeAddAndGet(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/hi",
@@ -153,7 +153,7 @@ func TestTreeAddAndGet(t *testing.T) {
 }
 
 func TestTreeWildcard(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/",
@@ -213,7 +213,7 @@ type testRoute struct {
 }
 
 func testRoutes(t *testing.T, routes []testRoute) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	for _, route := range routes {
 		recv := catchPanic(func() {
@@ -270,7 +270,7 @@ func TestTreeChildConflict(t *testing.T) {
 }
 
 func TestTreeDupliatePath(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/",
@@ -308,7 +308,7 @@ func TestTreeDupliatePath(t *testing.T) {
 }
 
 func TestEmptyWildcardName(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/user:",
@@ -353,7 +353,7 @@ func TestTreeDoubleWildcard(t *testing.T) {
 	}
 
 	for _, route := range routes {
-		tree := &RouteNode{}
+		tree := &node{}
 		recv := catchPanic(func() {
 			tree.addRoute("GET", route, nil)
 		})
@@ -376,7 +376,7 @@ func TestTreeDoubleWildcard(t *testing.T) {
 }*/
 
 func TestTreeTrailingSlashRedirect(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/hi",
@@ -459,7 +459,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 }
 
 func TestTreeRootTrailingSlashRedirect(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	recv := catchPanic(func() {
 		tree.addRoute("GET", "/:test", fakeHandler("/:test"))
@@ -477,7 +477,7 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 }
 
 func TestTreeFindCaseInsensitivePath(t *testing.T) {
-	tree := &RouteNode{}
+	tree := &node{}
 
 	routes := [...]string{
 		"/hi",
@@ -610,12 +610,12 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 func TestTreeInvalidNodeType(t *testing.T) {
 	const panicMsg = "invalid node type"
 
-	tree := &RouteNode{}
+	tree := &node{}
 	tree.addRoute("GET", "/", fakeHandler("/"))
 	tree.addRoute("GET", "/:page", fakeHandler("/:page"))
 
 	// set invalid node type
-	tree.Children[0].RouteNodeType = 42
+	tree.children[0].nodeType = 42
 
 	// normal lookup
 	recv := catchPanic(func() {
